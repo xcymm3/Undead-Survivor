@@ -9,7 +9,7 @@ import { chromium, expect } from '@playwright/test';
 
 const project = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const { version } = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'));
-const source = path.resolve(process.argv[2] || path.join(project, 'release', `Undead Tower ${version}.exe`));
+const source = path.resolve(process.argv[2] || path.join(project, 'release', `Undead Survivor-${version}.exe`));
 const evidence = path.join(project, 'test-results', `portable-${Date.now()}`);
 let portableDir = path.join(evidence, '初次运行');
 await mkdir(portableDir, { recursive: true });
@@ -18,6 +18,15 @@ await copyFile(source, path.join(portableDir, filename));
 const errors = [];
 const requests = new Set();
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function captureMouse(page) {
+  await page.bringToFront();
+  if (!await page.evaluate(() => Boolean(document.pointerLockElement))) {
+    await delay(1200);
+    await page.getByTestId('game-canvas').click({ position: { x: 640, y: 360 } });
+  }
+  await expect.poll(() => page.evaluate(() => Boolean(document.pointerLockElement))).toBe(true);
+}
 
 async function start() {
   const server = createServer();
@@ -48,7 +57,7 @@ async function start() {
     await page.waitForURL('undead://game/');
     await context.setOffline(true);
     await page.reload();
-    await expect(page).toHaveTitle('Undead Tower');
+    await expect(page).toHaveTitle('Undead Survivor');
     await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled({ timeout: 20000 });
     assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
     assert.equal(await page.evaluate(() => typeof window.__undeadTower), 'undefined');
@@ -82,7 +91,11 @@ try {
   await page.getByRole('button', { name: '返回哨站' }).click();
   console.log('实际 portable EXE 已离线启动；验证练习、开火、装填、暂停与全屏');
   await page.getByRole('button', { name: '进入哨站' }).click();
+  await captureMouse(page);
   await expect(page.getByRole('heading', { name: '僵尸练习靶场' })).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('.terrain-hint')).toContainText('腾空中');
+  await expect(page.locator('.terrain-hint')).toContainText('跳跃过河');
   await expect(page.getByTestId('ammo')).toHaveText('30');
   const bounds = await page.locator('canvas').boundingBox();
   await page.mouse.click(bounds.x + bounds.width * 0.55, bounds.y + bounds.height * 0.45);
@@ -143,9 +156,12 @@ try {
     observe();
   }); });
   await page.getByRole('button', { name: '开始坚守' }).click();
-  await expect(page.locator('.horde-status')).toContainText('移速 1.4 m/s');
+  await captureMouse(page);
+  await expect(page.getByTestId('wave-number')).toHaveText('第 1 波');
+  await expect(page.getByTestId('wave-progress')).toContainText('本波 9 只');
+  await expect(page.locator('.horde-status')).toContainText('移速 1.40 m/s');
   await expect(page.locator('.horde-status')).toContainText('铁桶 1', { timeout: 16000 });
-  await expect(page.locator('.horde-status')).toContainText('移速 1.4 m/s');
+  await expect(page.locator('.horde-status')).toContainText('移速 1.40 m/s');
   await page.screenshot({ path: path.join(evidence, 'portable-game.png') });
   console.log('六枪开火、装填、数字键与滚轮切换通过；等待自然失败与两秒特写');
   const cinematic = await page.evaluate(() => window.__portableCinematic);
@@ -156,15 +172,20 @@ try {
   await expect(page.locator('.record-notice')).toContainText('已保存');
   await expect(page.getByTestId('personal-record')).toContainText('个人纪录已建立');
   record = await page.evaluate(() => {
-    const key = Object.keys(localStorage).find(key => key.startsWith('undead-tower.leaderboard.') && localStorage.getItem(key) !== '[]');
+    const key = Object.keys(localStorage).find(key => key.startsWith('undead-survivor.leaderboard.waves-') && localStorage.getItem(key) !== '[]');
     return { key, entries: JSON.parse(localStorage.getItem(key)) };
   });
   assert.equal(record.entries.length, 1);
   assert.equal(record.entries[0].difficulty, 'hard');
+  assert.equal(record.entries[0].mode, 'survival');
+  assert.equal(record.entries[0].waves, 0);
+  assert.equal(record.entries[0].wave, 1);
+  assert.equal(record.entries[0].cause, 'zombie');
+  await expect(page.getByTestId('survival-result')).toHaveText('0 波');
   assert.ok(record.entries[0].duration > 10);
   await page.screenshot({ path: path.join(evidence, 'portable-result.png') });
   await stop(session); session = null;
-  assert.ok((await stat(path.join(portableDir, 'Undead Tower Data', 'Browser', 'Local Storage'))).isDirectory());
+  assert.ok((await stat(path.join(portableDir, 'Undead Survivor Data', 'Browser', 'Local Storage'))).isDirectory());
 
   // 移动的目录由本脚本新建，且源和目标都限定在本次测试证据目录内。
   const movedDir = path.join(evidence, '搬迁后');
@@ -185,7 +206,7 @@ try {
   await stop(session); session = null;
   assert.deepEqual(errors, []);
   assert.deepEqual([...requests].filter(url => !url.startsWith('undead://game/')), []);
-  await writeFile(path.join(evidence, 'result.json'), JSON.stringify({ version, source, bytes: (await stat(source)).size, offline: true, errors, requests: [...requests], record, reloadMs, cinematic, movedDataPersists: true, checks: ['production WebGL startup', 'no renderer Node API or dev diagnostics', 'six weapons fire and reload', 'digit and wheel switching', 'pause', 'fullscreen', 'fixed hard difficulty and 1.4 m/s speed', 'early armored zombies', 'natural defeat and two-second culprit cinematic', 'personal record feedback', 'leaderboard saved', 'volume setting persists after relocation', 'portable relocation and relaunch', 'clean exit'] }, null, 2));
+  await writeFile(path.join(evidence, 'result.json'), JSON.stringify({ version, source, bytes: (await stat(source)).size, offline: true, errors, requests: [...requests], record, reloadMs, cinematic, movedDataPersists: true, checks: ['production WebGL startup', 'no renderer Node API or dev diagnostics', 'six weapons fire and reload', 'digit and wheel switching', 'pause', 'fullscreen', 'hard difficulty, fixed wave quota and first-wave speed', 'early armored zombies', 'natural defeat and two-second culprit cinematic', 'personal record feedback', 'leaderboard saved', 'volume setting persists after relocation', 'portable relocation and relaunch', 'clean exit'] }, null, 2));
   console.log(`Portable 验证通过，证据：${evidence}`);
 } catch (error) {
   if (session?.page && !session.page.isClosed()) await session.page.screenshot({ path: path.join(evidence, 'failed.png') }).catch(() => {});

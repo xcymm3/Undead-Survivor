@@ -41,6 +41,8 @@
 
 ## 在本地开始游戏
 
+Windows 便携版可直接双击 `release/Undead Survivor-0.5.0.exe` 离线启动，无需安装开发环境；操作与数据保存说明见 [便携版说明](docs/PORTABLE.md)。
+
 1. 安装 [Node.js](https://nodejs.org/) **22.12 或更高版本**，安装时保留 npm。
 2. 在本仓库页面点击 **Code → Download ZIP**，解压后进入包含 `package.json` 的文件夹。
 3. 在这个文件夹中打开终端，依次运行：
@@ -64,7 +66,7 @@ npm run build
 npm run test:e2e
 ```
 
-浏览器测试使用单 worker 的 Chrome，独占端口 5177，不复用已有服务。开发服务使用 5176，避免与原项目冲突。当前交付为源码和网页版，未重新打包便携 EXE。`docs/PROJECT.md`、`docs/BALANCE.md` 顶部记录当前规则，下方旧版评估仅供追溯。
+浏览器测试使用单 worker 的 Chrome，独占端口 5177，不复用已有服务。开发服务使用 5176，避免与原项目冲突。2026-09-04 按用户要求打包当前 Windows 便携版。`docs/PROJECT.md`、`docs/BALANCE.md` 顶部记录当前规则，下方旧版评估仅供追溯。
 
 ## 鸣谢
 

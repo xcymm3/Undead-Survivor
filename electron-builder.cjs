@@ -17,5 +17,5 @@ module.exports = {
     requestedExecutionLevel: 'asInvoker',
     signExecutable: false,
   },
-  portable: { artifactName: 'Undead Survivor ${version}.${ext}', requestExecutionLevel: 'user', unpackDirName: false },
+  portable: { artifactName: 'Undead Survivor-${version}.${ext}', requestExecutionLevel: 'user', unpackDirName: false },
 };
