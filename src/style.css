@@ -348,3 +348,8 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 @media (max-width: 900px) { .mode-menu h1 { font-size: clamp(52px, 10vw, 80px); } .health-panel { left: 18px; bottom: 104px; width: 155px; padding: 12px; } .health-panel strong { font-size: 32px; } .health-panel small { font-size: 8px; } .pointer-hint { width: 80%; white-space: normal; text-align: center; } }
 
 @media (max-width: 900px) { .mode-menu h1 { display: flex; flex-direction: column; gap: 0; } .mode-menu h1 br, .mode-menu h1 b { display: none; } }
+
+.survival-clock > small { display: block; margin-top: 5px; color: var(--color-muted); font-size: 10px; }
+.terrain-hint { position: absolute; bottom: 54px; left: 36px; font-size: 11px; color: var(--color-ink); }
+.terrain-hint small { display: inline; margin-left: 12px; color: var(--color-muted); font-size: 10px; }
+@media (max-width: 900px) { .terrain-hint { left: 18px; bottom: 64px; font-size: 10px; } .terrain-hint small { display: block; margin: 5px 0 0; font-size: 8px; } .survival-clock > small { font-size: 8px; } .horde-status { top: 280px; } }

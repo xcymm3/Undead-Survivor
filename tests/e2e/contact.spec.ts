@@ -3,7 +3,7 @@ import { fire, lookAt, snapshot, start } from './controls';
 
 test('贴近僵尸时枪口仍在目标外，可以正常爆头开火', async ({ page }) => {
   await start(page);
-  const target = (await snapshot(page)).targets[1];
+  const target = (await snapshot(page)).targets[0];
   await lookAt(page, target.x, 1.7, target.z);
   await page.keyboard.down('w');
   await expect.poll(async () => {

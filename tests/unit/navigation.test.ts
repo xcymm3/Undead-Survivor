@@ -58,8 +58,8 @@ describe('静态障碍寻路与连续碰撞', () => {
 it('实际场景六个入口可通行，并能绕障追到移动后的玩家', () => {
   vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, strokeRect() {}, fillText() {} }) }) });
   try {
-    const world = createWorld(new Scene()), nav = new Navigation(world.obstacles);
-    for (const goal of [{ x: 0, z: 9 }, { x: -19, z: -15 }, { x: 18, z: -40 }]) {
+    const world = createWorld(new Scene()), nav = new Navigation(world.obstacles, true);
+    for (const goal of [{ x: 0, z: 9 }, { x: -19, z: -8 }, { x: 18, z: -40 }]) {
       for (const zone of SPAWN_ZONES) {
         const z = zombie(0, zone.center.x, zone.center.z), movement = new CrowdMovement(nav);
         expect(nav.clear(z, z), zone.id).toBe(true);

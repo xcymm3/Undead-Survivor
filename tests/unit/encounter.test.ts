@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACK, DIFFICULTIES, SURVIVAL } from '../../src/game/config';
-import type { Difficulty } from '../../src/game/config';
-import { Encounter, pressureAt, spawnIntegral } from '../../src/game/encounter';
+import { ATTACK, WAVES, SURVIVAL } from '../../src/game/config';
+import { Encounter, waveSettings } from '../../src/game/encounter';
 import { PerspectiveCamera, Vector3 } from 'three';
 import { SPAWN_ZONES, SpawnDirector } from '../../src/game/spawn';
 import { seededRandom } from '../../src/game/geometry';
@@ -22,39 +21,52 @@ describe('练习与正式模式', () => {
     expect(encounter.zombies[1].health).toBe(100);
   });
 
-  it('三档难度共享刷新曲线和固定移速', () => {
-    for (const time of [0, 30, 60, 120, 1000]) {
-      expect(pressureAt('easy', time)).toEqual(pressureAt('normal', time));
-      expect(pressureAt('normal', time)).toEqual(pressureAt('hard', time));
+  it('每波数量固定，等待不会升波；逐波数量与移速递增', () => {
+    expect(waveSettings(1)).toEqual({ count: 9, speed: 1.4, spawnRate: 1 });
+    for (let wave = 2; wave <= 100; wave++) {
+      expect(waveSettings(wave).count).toBeGreaterThan(waveSettings(wave - 1).count);
+      expect(waveSettings(wave).speed).toBeGreaterThan(waveSettings(wave - 1).speed);
+      expect(waveSettings(wave).spawnRate).toBeLessThanOrEqual(10);
     }
-    expect(pressureAt('easy', 0)).toEqual({ spawnRate: 0.65, speed: 1.4 });
-    expect(pressureAt('hard', 60)).toEqual({ spawnRate: 2.75, speed: 1.4 });
+    const e = new Encounter(); e.reset('survival', 'hard');
+    e.update(60, farSpawn); expect(e.waveSpawned).toBe(9); expect(e.totalSpawned).toBe(9);
+    expect(e.wave).toBe(1); expect(e.wavesCleared).toBe(0);
   });
-
-  for (const difficulty of Object.keys(DIFFICULTIES) as Difficulty[]) {
-    it(`${difficulty} 刷新逐渐增多并封顶每秒 10 只，移速始终为 1.4 米每秒`, () => {
-      expect(pressureAt(difficulty, 60).spawnRate).toBeGreaterThan(pressureAt(difficulty, 0).spawnRate);
-      expect(pressureAt(difficulty, 1000).spawnRate).toBe(10);
-      for (const time of [0, 60, 180, 1000, 2000]) expect(pressureAt(difficulty, time).speed).toBe(1.4);
-      for (const start of [0, 50, 100, 150, 260, 480, 1000]) expect(spawnIntegral(difficulty, start, start + 1)).toBeLessThanOrEqual(10 + 1e-9);
-      const encounter = new Encounter();
-      encounter.reset('survival', difficulty);
-      encounter.elapsed = 1000;
-      for (let i = 0; i < 60; i++) encounter.update(1 / 60, farSpawn);
-      expect(encounter.totalSpawned).toBe(10);
-      encounter.update(1, farSpawn);
-      expect(encounter.totalSpawned).toBe(20);
-    });
-  }
-
-  it('帧率变化不改变刷新总数', () => {
-    const counts = [20, 60, 144].map(fps => {
-      const encounter = new Encounter(); encounter.reset('survival', 'normal');
-      for (let frame = 0; frame < fps * 30; frame++) encounter.update(1 / fps, farSpawn);
-      return encounter.totalSpawned;
-    });
-    expect(new Set(counts).size).toBe(1);
-    expect(counts[0]).toBe(Math.floor(spawnIntegral('normal', 0, 30)));
+  it('清完全部配额才记一波，休整五秒后进入下一波，暂停不推进', () => {
+    const e = new Encounter(); e.reset('survival', 'hard');
+    e.update(4, farSpawn);
+    for (const z of e.zombies) e.hit(z.id, true, 1000);
+    e.update(0.1, farSpawn); expect(e.wavesCleared).toBe(0);
+    e.update(6, farSpawn);
+    for (const z of e.zombies) if (z.health > 0) e.hit(z.id, true, 1000);
+    e.update(0.05, farSpawn);
+    expect(e.waveSpawned).toBe(9); expect(e.wavesCleared).toBe(1); expect(e.intermission).toBe(WAVES.rest);
+    e.update(0, farSpawn); expect(e.intermission).toBe(WAVES.rest);
+    e.update(4.95, farSpawn); expect(e.wave).toBe(1);
+    e.update(0.05, farSpawn); expect(e.wave).toBe(2); expect(e.waveSpawned).toBe(0);
+    e.update(20, farSpawn); expect(e.waveSpawned).toBe(15); expect(e.totalSpawned).toBe(24);
+    expect(e.pressure.speed).toBeCloseTo(1.55);
+  });
+  it('入口暂不可用不丢配额，恢复后不会突发补刷', () => {
+    const e = new Encounter(); e.reset('survival', 'hard');
+    e.update(30, () => null); expect(e.waveSpawned).toBe(0); expect(e.wave).toBe(1);
+    e.update(0.05, farSpawn); expect(e.waveSpawned).toBe(1);
+    e.update(15, farSpawn); expect(e.waveSpawned).toBe(9); expect(e.totalSpawned).toBe(9);
+  });
+  it('常见帧率下每波配额一致', () => {
+    for (const fps of [20, 60, 144]) {
+      const e = new Encounter(); e.reset('survival', 'hard');
+      for (let frame = 0; frame < fps * 15; frame++) e.update(1 / fps, farSpawn);
+      expect(e.waveSpawned).toBe(9);
+    }
+  });
+  it('落水直接失败且冻结波次，练习落水也结束；重开清空', () => {
+    for (const mode of ['practice', 'survival'] as const) {
+      const e = new Encounter(); e.reset(mode, 'hard'); e.drown();
+      expect(e.failureCause).toBe('water'); expect(e.health).toBe(0); expect(e.breachedId).toBeNull();
+      e.update(100, farSpawn); expect(e.waveSpawned).toBe(0); expect(e.wavesCleared).toBe(0);
+      e.reset(mode, 'hard'); expect(e.failed).toBe(false); expect(e.health).toBe(100); expect(e.wave).toBe(1);
+    }
   });
 
   it('近身先挥臂，命中扣血，持续攻击至零血才失败，重开恢复满血', () => {
@@ -109,7 +121,7 @@ describe('练习与正式模式', () => {
   });
 
   it('存活与倒地实例数量始终有内存边界', () => {
-    const encounter = new Encounter(); encounter.reset('survival', 'hard'); encounter.elapsed = 1000;
+    const encounter = new Encounter(); encounter.reset('survival', 'hard'); encounter.wave = 100;
     encounter.update(40, () => ({ x: 10000, z: -10000 }));
     expect(encounter.zombies.length).toBe(SURVIVAL.maxZombies);
   });

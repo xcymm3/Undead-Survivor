@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { batchStaticBoxes, box, cube, material, seededRandom } from './geometry';
+import { createTerrain } from './terrainView';
+import { BRIDGES, inRiver, onBridge } from './terrain';
 import { ARENA } from './config';
 import { SPAWN_ZONES } from './spawn';
 import type { Obstacle } from './navigation';
@@ -91,12 +93,10 @@ export function createWorld(scene: THREE.Scene) {
   sun.shadow.normalBias = 0.035;
   sun.target.position.set(0, 0, -20);
   scene.add(sun, sun.target);
-  const ground = box(scene, [230, 0.5, 240], [0, -0.3, -75], 0x7e8d68);
-  ground.castShadow = false;
-  box(scene, [12.8, 0.04, 170], [1, -0.005, -64], 0x9c9d80);
-  box(scene, [10, 0.045, 170], [1, 0.015, -64], 0x69756c);
-  for (let i = 0; i < 21; i++) box(scene, [0.14, 0.015, 2.8], [1, 0.05, 8 - i * 7.6], 0xbec2a2);
-  for (const edge of [-3.4, 5.4]) box(scene, [0.09, 0.015, 148], [edge, 0.048, -59], 0x9aa88e);
+  createTerrain(scene);
+  for (const [index, bridge] of BRIDGES.entries()) {
+    sign(scene, `BRIDGE 0${index + 1}`, 'CROSSING / DEEP WATER', bridge.x + bridge.halfWidth + 1.4, 1.7, bridge.z + bridge.halfLength + 0.3, 3.3);
+  }
 
   const random = seededRandom(42031);
   // 树冠、树干和草采用实例化绘制，控制大量方块的 draw calls。
@@ -125,6 +125,7 @@ export function createWorld(scene: THREE.Scene) {
   for (let i = 0; i < 520; i++) {
     const x = (i % 2 ? -1 : 1) * (6.6 + random() * 35);
     transform.position.set(x, 0.13, 8 - random() * 95);
+    if (inRiver({ x, z: transform.position.z }) || onBridge({ x, z: transform.position.z })) transform.position.y = -2;
     transform.scale.set(0.08 + random() * 0.12, 0.16 + random() * 0.35, 0.09);
     transform.rotation.set(0, random() * 6.28, random() * 0.3); transform.updateMatrix(); grasses.setMatrixAt(i, transform.matrix);
   }
@@ -147,8 +148,8 @@ export function createWorld(scene: THREE.Scene) {
   }
 
   solid(building(scene, -13.5, -26), 'station');
-  solid(pickup(scene, 10.2, -19), 'pickup');
-  solid(barrier(scene, -3, -12, -0.08), 'barrier-near');
+  solid(pickup(scene, 15, -23), 'pickup');
+  solid(barrier(scene, -3, -24, -0.08), 'barrier-near');
   solid(barrier(scene, 4.5, -26, 0.11), 'barrier-east');
   solid(barrier(scene, -1.5, -40), 'barrier-north');
   // 路障横杆保持高于靶标，避免遮挡射击验收。

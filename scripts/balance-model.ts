@@ -1,5 +1,5 @@
 import { PerspectiveCamera, Vector3 } from 'three';
-import { ARMOR_SPAWNS, CONFIG, CROWD, PRESSURE, ZOMBIE_TYPES } from '../src/game/config';
+import { ARMOR_SPAWNS, CONFIG, CROWD, WAVES, ZOMBIE_TYPES } from '../src/game/config';
 import type { Difficulty, ZombieKind } from '../src/game/config';
 import { distanceToContact, Encounter } from '../src/game/encounter';
 import { Firearm } from '../src/game/firearm';
@@ -76,7 +76,7 @@ export function simulateRun(difficulty: Difficulty, profile: typeof PLAYER_PROFI
     const result = encounter.hit(target.id, head)!;
     if (result.killed) { kills[originalKinds.get(target.id) ?? target.kind]++; targetId = null; }
   }
-  return { seed, seconds: encounter.elapsed, failed: encounter.failed, shots: firearm.shots, hits, headHits, kills, spawned, firstAppearance, maxAlive, finalPressure: encounter.pressure };
+  return { seed, wavesCleared: encounter.wavesCleared, seconds: encounter.elapsed, failed: encounter.failed, shots: firearm.shots, hits, headHits, kills, spawned, firstAppearance, maxAlive, finalPressure: encounter.pressure };
 }
 
 export function evaluateBalance() {
@@ -88,8 +88,8 @@ export function evaluateBalance() {
     groups.push({ difficulty, profile: profile.id, fps, samples: runs.length, min: quantile(0), p10: quantile(0.1), median: quantile(0.5), p90: quantile(0.9), max: quantile(1), withinTarget: runs.filter(r => r.seconds >= 60 && r.seconds <= 180).length, runs });
   }
   return {
-    generatedAt: new Date().toISOString(), profiles: PLAYER_PROFILES, pressure: PRESSURE, armorSpawns: { ...ARMOR_SPAWNS, enabledFromStart: true }, crowd: CROWD, zombieTypes: ZOMBIE_TYPES, weapon: CONFIG.weapon,
-    assumptions: ['使用实际 Encounter、Firearm、SpawnDirector，1440×900 固定镜头，分别模拟 60/30 FPS。', '命中率和命中后的爆头比例是操作假设，不是实测玩家数据；获取目标延迟和换弹反应时间按配置计算。', '选择距离失守路线最短的可见活僵尸，击杀后切换；模型不精确模拟建筑遮挡、鼠标轨迹或枪口视差，结果偏乐观。', '每组 24 个可复现种子，最多模拟 360 秒；理想机器人是参考值，不是数学证明的绝对极限。'],
+    generatedAt: new Date().toISOString(), profiles: PLAYER_PROFILES, waves: WAVES, armorSpawns: { ...ARMOR_SPAWNS, enabledFromStart: true }, crowd: CROWD, zombieTypes: ZOMBIE_TYPES, weapon: CONFIG.weapon,
+    assumptions: ['使用实际 Encounter、Firearm、SpawnDirector，1440×900 固定镜头，分别模拟 60/30 FPS。', '命中率和命中后的爆头比例是操作假设，不是实测玩家数据；获取目标延迟和换弹反应时间按配置计算。', '选择距离失守路线最短的可见活僵尸，击杀后切换；此历史模型不模拟河流、跳跃和桥梁，也不精确模拟建筑遮挡、鼠标轨迹或枪口视差，结果偏乐观。', '每组 24 个可复现种子，最多模拟 360 秒；理想机器人是参考值，不是数学证明的绝对极限。'],
     groups,
   };
 }

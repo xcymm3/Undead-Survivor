@@ -14,6 +14,6 @@ if not exist "node_modules\vite\bin\vite.js" (
     exit /b 1
   )
 )
-echo Starting Undead Tower. Close this window to stop the server.
+echo Starting Undead Survivor. Close this window to stop the server.
 call npm run dev -- --strictPort --open
 if errorlevel 1 pause

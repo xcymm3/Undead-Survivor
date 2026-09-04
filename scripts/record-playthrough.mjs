@@ -4,7 +4,7 @@ import path from 'node:path';
 import { installAudioCapture, startVideoCapture, muxCapture } from './playthrough-capture.mjs';
 
 // 用真实键鼠输入操作正式模式。诊断接口仅用于读取目标投影和核对演示覆盖，不修改对局。
-const url = process.env.GAME_URL ?? 'http://127.0.0.1:5175/';
+const url = process.env.GAME_URL ?? 'http://127.0.0.1:5176/';
 const stamp = new Date().toISOString().replaceAll(':', '-').replace(/\.\d+Z$/, 'Z');
 const directory = path.resolve('recordings', stamp);
 await mkdir(directory, { recursive: true });
@@ -93,7 +93,7 @@ try {
   }
   await page.mouse.up();
   log('defense-breached', state, { culprit: state.breach });
-  await page.getByRole('heading', { name: '坚守排行榜', exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+  await page.getByRole('heading', { name: '波次排行榜', exact: true }).waitFor({ state: 'visible', timeout: 8000 });
   state = await snapshot(); result = state.result;
   log('run-ended', state, { result });
   await pause(4000);

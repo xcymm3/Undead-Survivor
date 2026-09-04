@@ -15,7 +15,8 @@ import { BloodEffects } from './blood';
 import { ArmorEffects } from './armorEffects';
 import { BreachSequence } from './breach';
 import { Navigation } from './navigation';
-import { movePlayer, turnView } from './player';
+import { PlayerMotion, turnView } from './player';
+import { isWater, BRIDGES, RIVER_POINTS } from './terrain';
 
 interface Effect { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; gravity: number; spin: boolean; shrink: boolean; }
 interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: boolean, killed: boolean, armorBroken: boolean) => void; onError: (message: string) => void; onEnd: (result: RunResult) => void; }
@@ -39,6 +40,7 @@ export class Game {
   private wheelTime = 0;
   private audio = new GameAudio();
   private phase: GamePhase = 'ready';
+  private playerMotion = new PlayerMotion();
   private keys = new Set<string>();
   private lockPending = false;
   private lockHint = false;
@@ -87,7 +89,7 @@ export class Game {
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.x = 0;
     this.world = createWorld(this.scene);
-    this.navigation = new Navigation(this.world.obstacles);
+    this.navigation = new Navigation(this.world.obstacles, true);
     this.encounter.setNavigation(this.navigation);
     this.zombieField.sync(this.encounter);
     this.scene.add(this.zombieField);
@@ -163,7 +165,7 @@ export class Game {
   };
   private keyUp = (event: KeyboardEvent) => { this.keys.delete(event.code); };
   private clearInput() {
-    this.keys.clear(); this.trigger = false;
+    this.keys.clear(); this.playerMotion.clearInput(); this.trigger = false;
     if (this.pointerLocked) document.exitPointerLock();
   }
   private pointerMove = (event: PointerEvent) => {
@@ -197,6 +199,7 @@ export class Game {
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (event.code === 'Escape') { event.preventDefault(); if (this.phase === 'playing') this.pause(); else if (this.phase === 'paused') this.start(); }
     if (this.phase !== 'playing') return;
+    if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked) this.playerMotion.jump(); }
     if (/^Key[WASD]$/.test(event.code)) { event.preventDefault(); if (this.pointerLocked) this.keys.add(event.code); }
     if (/^(Digit|Numpad)[1-6]$/.test(event.code)) { event.preventDefault(); this.switchWeapon(Number(event.code.slice(-1)) - 1); }
     if (event.code === 'KeyR') { event.preventDefault(); this.reload(); }
@@ -245,7 +248,7 @@ export class Game {
     this.audio.resetMusic();
     this.weapon.root.visible = true;
     this.arsenal.reset(); this.weapon.select(0); this.hitCount = 0; this.kills = 0;
-    this.encounter.reset(mode, FIXED_DIFFICULTY);
+    this.encounter.reset(mode, FIXED_DIFFICULTY); this.playerMotion.reset();
     this.keys.clear(); this.navigation.setGoal(this.encounter.player);
     this.spawns.reset();
     this.zombieField.sync(this.encounter);
@@ -275,11 +278,16 @@ export class Game {
   }
 
   private endRun() {
-    if (this.phase !== 'playing' || this.encounter.mode !== 'survival') return;
+    if (this.phase !== 'playing') return;
     this.phase = 'breaching'; this.clearInput(); this.flashTime = 0; this.dirty = true;
     this.weapon.root.visible = false;
     this.audio.setPlaying(false);
-    this.result = { id: crypto.randomUUID(), difficulty: this.encounter.difficulty, duration: this.encounter.elapsed, kills: this.kills, shots: this.arsenal.shots, hits: this.hitCount, endedAt: new Date().toISOString() };
+    this.result = { mode: this.encounter.mode, waves: this.encounter.wavesCleared, wave: this.encounter.wave, cause: this.encounter.failureCause ?? 'zombie', id: crypto.randomUUID(), difficulty: this.encounter.difficulty, duration: this.encounter.elapsed, kills: this.kills, shots: this.arsenal.shots, hits: this.hitCount, endedAt: new Date().toISOString() };
+    if (this.encounter.failureCause === 'water') {
+      this.phase = 'failed'; this.audio.failure();
+      if (this.encounter.mode === 'survival') this.callbacks.onEnd(this.result);
+      this.publish(); return;
+    }
     const culprit = this.encounter.zombies.find(z => z.id === this.encounter.breachedId)!;
     this.breachSequence.begin(this.camera, culprit, this.world.surfaces);
     this.audio.failure();
@@ -305,7 +313,7 @@ export class Game {
   }
 
   private updateAim(_delta: number) {
-    this.camera.position.set(this.encounter.player.x, CONFIG.camera.height, this.encounter.player.z);
+    this.camera.position.set(this.encounter.player.x, CONFIG.camera.height + this.playerMotion.height, this.encounter.player.z);
     this.camera.rotation.set(this.view.y, this.view.x, 0, 'YXZ');
     this.camera.updateMatrixWorld(true);
     this.raycaster.setFromCamera(this.aim, this.camera);
@@ -441,7 +449,11 @@ export class Game {
       this.blood.update(delta);
       this.armorEffects.update(delta);
       const previousHealth = this.encounter.health;
-      this.encounter.update(delta, this.spawnEnemy, step => movePlayer(this.encounter.player, this.view.x, this.keys, step, this.navigation, this.encounter.zombies));
+      this.encounter.update(delta, this.spawnEnemy, step => {
+        const drowned = this.playerMotion.update(this.encounter.player, this.view.x, this.keys, step, this.navigation, this.encounter.zombies);
+        this.encounter.playerHeight = this.playerMotion.height;
+        if (drowned) this.encounter.drown();
+      });
       if (this.encounter.health < previousHealth) { this.audio.tone(110, 45, 0.14, 0.06); this.publish(); }
       this.zombieField.sync(this.encounter);
       if (this.encounter.failed) this.endRun();
@@ -477,7 +489,7 @@ export class Game {
   };
 
   private publish() {
-    this.callbacks.onState({ health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
+    this.callbacks.onState({ wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -499,6 +511,9 @@ export class Game {
       return { x: (p.x + 1) / 2 * this.width, y: (1 - p.y) / 2 * this.height };
     };
     return {
+      wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission,
+      jump: { height: this.playerMotion.height, velocity: this.playerMotion.velocity, grounded: this.playerMotion.grounded },
+      overWater: isWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),
       health: this.encounter.health, player: { ...this.encounter.player }, pointerLocked: this.pointerLocked, lockHint: this.lockHint,
       phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, totalSpawned: this.encounter.totalSpawned, pressure: this.encounter.pressure, nearest: this.encounter.nearest, result: this.result, ammo: this.firearm.ammo, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, reloading: this.firearm.reloading,
       yaw: this.view.x, pitch: this.view.y, aim: this.aim.toArray(), aimPoint: this.aimPoint.toArray(), muzzle: muzzle.toArray(), barrelDirection: barrelDirection.toArray(),

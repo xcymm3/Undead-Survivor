@@ -1,15 +1,15 @@
 import type { Difficulty, RunResult } from './config';
 
-// 自由移动生存模式单独记榜，避免与原哨塔规则的成绩混合。
-export const LEADERBOARD_KEY = 'undead-survivor.leaderboard.v1';
+// 波次成绩独立保存，旧时长榜保留在原键，不把旧时长虚构成波数。
+export const LEADERBOARD_KEY = 'undead-survivor.leaderboard.waves-v1';
 type StoragePort = Pick<Storage, 'getItem' | 'setItem'>;
 export interface PersonalRecord { status: 'first' | 'new' | 'tied' | 'chasing'; previous: number | null; difference: number; }
 
-/** 在写入本次成绩前比较同难度最佳，按界面显示的十分之一秒比较。 */
+/** 在写入本次成绩前比较同难度最佳，按完整守住的波数比较。 */
 export function personalRecord(result: RunResult, entries: RunResult[]): PersonalRecord {
-  const previous = entries.filter(r => r.difficulty === result.difficulty && r.id !== result.id).reduce<number | null>((best, r) => best === null ? r.duration : Math.max(best, r.duration), null);
+  const previous = entries.filter(r => r.difficulty === result.difficulty && r.id !== result.id).reduce<number | null>((best, r) => best === null ? r.waves : Math.max(best, r.waves), null);
   if (previous === null) return { status: 'first', previous, difference: 0 };
-  const difference = (Math.floor(result.duration * 10 + 1e-6) - Math.floor(previous * 10 + 1e-6)) / 10;
+  const difference = result.waves - previous;
   return { status: difference > 0 ? 'new' : difference === 0 ? 'tied' : 'chasing', previous, difference: Math.abs(difference) };
 }
 const difficulties: Difficulty[] = ['easy', 'normal', 'hard'];
@@ -17,7 +17,9 @@ const difficulties: Difficulty[] = ['easy', 'normal', 'hard'];
 function isResult(value: unknown): value is RunResult {
   if (!value || typeof value !== 'object') return false;
   const r = value as RunResult;
-  return typeof r.id === 'string' && r.id.length > 0 && difficulties.includes(r.difficulty)
+  return r.mode === 'survival' && ['water', 'zombie'].includes(r.cause)
+    && Number.isSafeInteger(r.waves) && r.waves >= 0 && Number.isSafeInteger(r.wave) && r.wave >= 1 && r.waves <= r.wave
+    && typeof r.id === 'string' && r.id.length > 0 && difficulties.includes(r.difficulty)
     && Number.isFinite(r.duration) && r.duration >= 0
     && [r.kills, r.shots, r.hits].every(n => Number.isSafeInteger(n) && n >= 0)
     && r.hits <= r.shots && r.kills <= r.hits
@@ -27,7 +29,7 @@ function isResult(value: unknown): value is RunResult {
 export function rankResults(entries: RunResult[]): RunResult[] {
   const unique = [...new Map(entries.filter(isResult).map(entry => [entry.id, entry])).values()];
   return difficulties.flatMap(difficulty => unique.filter(r => r.difficulty === difficulty)
-    .sort((a, b) => b.duration - a.duration || b.kills - a.kills || a.endedAt.localeCompare(b.endedAt) || a.id.localeCompare(b.id)).slice(0, 10));
+    .sort((a, b) => b.waves - a.waves || b.kills - a.kills || b.duration - a.duration || a.endedAt.localeCompare(b.endedAt) || a.id.localeCompare(b.id)).slice(0, 10));
 }
 
 /** 存储不可用时保留当前会话成绩，且明确向 UI 返回保存失败。 */
