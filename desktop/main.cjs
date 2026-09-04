@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu, protocol, session } = require('electron');
+const { app, BrowserWindow, dialog, Menu, protocol, session, ipcMain } = require('electron');
 const { mkdirSync, readFileSync } = require('node:fs');
 const path = require('node:path');
 
@@ -20,6 +20,23 @@ try {
 }
 
 let window;
+let steam;
+const steamEvent = event => { if (window && !window.isDestroyed()) window.webContents.send('coop:event', event); };
+function getSteam() { return steam ??= require('./steam.cjs').initialize(steamEvent); }
+const checkSender = event => { if (!window || event.sender !== window.webContents || !event.senderFrame?.url.startsWith(GAME_URL)) throw Error('无效的联机请求来源'); };
+ipcMain.handle('coop:status', event => {
+  checkSender(event);
+  try { return getSteam().status(); } catch (error) {
+    return { available: false, id: '', name: '', appId: 480, room: null, message: `Steam 未就绪，请登录 Steam 后重试。${error.message}` };
+  }
+});
+for (const method of ['create', 'search', 'join', 'leave', 'start']) ipcMain.handle(`coop:${method}`, (event, value) => {
+  checkSender(event); return getSteam()[method](value);
+});
+ipcMain.on('coop:send', (event, value) => {
+  try { checkSender(event); if (JSON.stringify(value).length <= 128 * 1024) steam?.sendData(value); } catch { /* 丢弃非法或过大的消息。 */ }
+});
+app.on('before-quit', () => { steam?.dispose(); steam = null; });
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -49,7 +66,7 @@ if (!app.requestSingleInstanceLock()) {
       title: 'Undead Survivor', width: 1440, height: 900, minWidth: 960, minHeight: 640,
       backgroundColor: '#1d2624', show: false, autoHideMenuBar: true,
       icon: path.join(__dirname, 'icon.ico'),
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: true },
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (!url.startsWith(GAME_URL)) event.preventDefault(); });

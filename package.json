@@ -13,6 +13,7 @@
     "desktop": "npm run install:runtime && npm run build && electron .",
     "dist:portable": "npm run install:runtime && node scripts/collect-notices.mjs && npm run build && electron-builder --config electron-builder.cjs --win portable --x64 --publish never",
     "test:portable": "node scripts/smoke-portable.mjs",
+    "test:desktop": "npm run build && node scripts/smoke-desktop.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4176",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -22,8 +23,10 @@
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.8",
     "@fontsource/ibm-plex-mono": "^5.2.7",
+    "koffi": "3.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "steamworks.js": "0.4.0",
     "three": "^0.185.1"
   },
   "devDependencies": {

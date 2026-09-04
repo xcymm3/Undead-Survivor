@@ -17,11 +17,18 @@ import { BreachSequence } from './breach';
 import { Navigation } from './navigation';
 import { PlayerMotion, turnView } from './player';
 import { isWater, BRIDGES, RIVER_POINTS } from './terrain';
+import { CoopSession } from '../multiplayer/CoopSession';
+import { PartnerView } from '../multiplayer/PartnerView';
+import type { Match, Pawn } from '../multiplayer/types';
 
 interface Effect { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; gravity: number; spin: boolean; shrink: boolean; }
 interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: boolean, killed: boolean, armorBroken: boolean) => void; onError: (message: string) => void; onEnd: (result: RunResult) => void; }
 
 export class Game {
+  private coop: CoopSession | null = null;
+  private partner: PartnerView | null = null;
+  private jumpSequence = 0;
+  private coopTimer: ReturnType<typeof setInterval> | null = null;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, 1, 0.025, 220);
   private renderer: THREE.WebGLRenderer;
@@ -44,6 +51,7 @@ export class Game {
   private keys = new Set<string>();
   private lockPending = false;
   private lockHint = false;
+  private focused = true;
   private aim = new THREE.Vector2();
   private view = new THREE.Vector2();
   private aimPoint = new THREE.Vector3();
@@ -109,6 +117,7 @@ export class Game {
     this.renderer.domElement.addEventListener('webglcontextlost', this.contextLost);
     window.addEventListener('pointerup', this.releaseTrigger);
     window.addEventListener('blur', this.blur);
+    window.addEventListener('focus', this.focus);
     window.addEventListener('keydown', this.keyDown);
     window.addEventListener('keyup', this.keyUp);
     document.addEventListener('pointerlockchange', this.pointerLockChange);
@@ -140,6 +149,8 @@ export class Game {
   }
 
   private get pointerLocked() { return document.pointerLockElement === this.renderer.domElement; }
+  // Electron 联机关闭计时器限速后，Page Visibility 可能仍报告可见；失焦时也停绘，只保留同步。
+  private get background() { return document.hidden || (this.coop !== null && !this.focused); }
   private requestPointerLock() {
     if (this.pointerLocked || this.lockPending) return;
     this.lockPending = true;
@@ -166,6 +177,7 @@ export class Game {
   private keyUp = (event: KeyboardEvent) => { this.keys.delete(event.code); };
   private clearInput() {
     this.keys.clear(); this.playerMotion.clearInput(); this.trigger = false;
+    this.coop?.sendInput(this.keys, this.view.x, this.view.y, this.jumpSequence, 1);
     if (this.pointerLocked) document.exitPointerLock();
   }
   private pointerMove = (event: PointerEvent) => {
@@ -191,7 +203,8 @@ export class Game {
     this.pause();
     this.callbacks.onError('3D 图形上下文已中断，请刷新页面重新加载哨站。');
   };
-  private blur = () => { this.pause(); };
+  private blur = () => { this.focused = false; this.pause(); };
+  private focus = () => { this.focused = true; this.dirty = true; };
   private visibility = () => { if (document.hidden) this.pause(); };
   private keyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
@@ -199,7 +212,7 @@ export class Game {
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (event.code === 'Escape') { event.preventDefault(); if (this.phase === 'playing') this.pause(); else if (this.phase === 'paused') this.start(); }
     if (this.phase !== 'playing') return;
-    if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked) this.playerMotion.jump(); }
+    if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked && (!this.coop || this.coop.local.health > 0)) { this.playerMotion.jump(); this.jumpSequence++; } }
     if (/^Key[WASD]$/.test(event.code)) { event.preventDefault(); if (this.pointerLocked) this.keys.add(event.code); }
     if (/^(Digit|Numpad)[1-6]$/.test(event.code)) { event.preventDefault(); this.switchWeapon(Number(event.code.slice(-1)) - 1); }
     if (event.code === 'KeyR') { event.preventDefault(); this.reload(); }
@@ -207,9 +220,11 @@ export class Game {
   };
 
   switchWeapon(index: number) {
+    if (this.coop?.local.health === 0) return;
     if (this.phase !== 'playing' || !this.weapon.loaded) return;
     this.releaseTrigger(); this.flashTime = 0;
     this.arsenal.request(index); this.publish();
+    this.coop?.command({ type: 'weapon', index });
   }
   private wheel = (event: WheelEvent) => {
     if (this.phase !== 'playing' || event.ctrlKey || event.deltaY === 0) return;
@@ -243,6 +258,7 @@ export class Game {
   }
 
   private prepare(mode: GameMode) {
+    this.stopCoop();
     this.breachSequence.reset();
     this.camera.position.set(0, CONFIG.camera.height, 9); this.camera.fov = CONFIG.camera.fov; this.camera.updateProjectionMatrix();
     this.audio.resetMusic();
@@ -271,6 +287,32 @@ export class Game {
 
   reset() { this.begin(this.encounter.mode); }
 
+  beginCoop(match: Match, send: (data: unknown) => void) {
+    this.prepare('survival'); this.jumpSequence = 0;
+    this.coop = new CoopSession(match, this.encounter, this.navigation, send);
+    this.partner = new PartnerView(); this.scene.add(this.partner);
+    this.phase = 'ready'; this.start(); this.coop.broadcast(0, true);
+    this.coopTimer = setInterval(() => {
+      if (!this.coop || this.phase === 'failed') return;
+      // 队员同样推进武器与结算，避免切出窗口后换弹冻结或错过全员阵亡快照。
+      if (this.background) {
+        const previousWeapon = this.arsenal.active;
+        this.arsenal.update(.05);
+        if (this.arsenal.active !== previousWeapon) this.weapon.select(this.arsenal.active);
+        this.advanceCoop(.05); this.publish();
+      }
+      if (performance.now() - this.coop.lastPacketAt > 20000) {
+        this.callbacks.onError('队友同步已中断，请重新连接房间。');
+        void window.steamCoop?.leave().catch(() => {}); this.menu();
+      }
+    }, 50);
+  }
+  receiveCoop(from: string, data: unknown) { this.coop?.receive(from, data); this.dirty = true; }
+  private stopCoop() {
+    if (this.coopTimer) clearInterval(this.coopTimer); this.coopTimer = null;
+    if (this.partner) this.scene.remove(this.partner); this.partner = null; this.coop = null;
+  }
+
   menu() {
     this.prepare('practice');
     this.phase = 'ready'; this.clearInput(); this.dirty = true;
@@ -278,6 +320,14 @@ export class Game {
   }
 
   private endRun() {
+    if (this.coop && (this.phase === 'playing' || this.phase === 'paused')) {
+      this.coop.broadcast(0, true); this.phase = 'failed'; this.clearInput(); this.weapon.root.visible = false;
+      this.audio.setPlaying(false); this.audio.failure();
+      this.result = { mode: 'survival', waves: this.encounter.wavesCleared, wave: this.encounter.wave, cause: 'zombie',
+        id: this.coop.match.session, difficulty: FIXED_DIFFICULTY, duration: this.encounter.elapsed, kills: this.encounter.kills,
+        shots: this.arsenal.shots, hits: this.hitCount, endedAt: new Date().toISOString() };
+      this.publish(); return;
+    }
     if (this.phase !== 'playing') return;
     this.phase = 'breaching'; this.clearInput(); this.flashTime = 0; this.dirty = true;
     this.weapon.root.visible = false;
@@ -294,12 +344,19 @@ export class Game {
     this.publish();
   }
 
-  private spawnEnemy = () => this.spawns.next(this.encounter.player, this.view.x, position => this.navigation.clear(position, position)
+  private spawnEnemy = () => {
+    const survivors = this.coop?.players.filter(p => p.health > 0);
+    const target = survivors?.find(p => p.id === this.coop?.local.id) ?? survivors?.[0];
+    return this.spawns.next(target ?? this.encounter.player, target?.yaw ?? this.view.x, position => this.navigation.clear(position, position)
+    && (!survivors || survivors.every(p => Math.hypot(p.x - position.x, p.z - position.z) >= 8))
     && this.navigation.waypoint(position) !== null
     && this.encounter.zombies.every(z => z.health <= 0 || Math.hypot(z.x - position.x, z.z - position.z) > 1.35));
+  };
 
   reload() {
+    if (this.coop?.local.health === 0) return;
     if (this.phase === 'playing' && this.arsenal.reload()) {
+      this.coop?.command({ type: 'reload', index: this.arsenal.active });
       if (this.firearm.reloading) this.audio.tone(660, 220, 0.09, 0.035);
       this.publish();
     }
@@ -313,7 +370,8 @@ export class Game {
   }
 
   private updateAim(_delta: number) {
-    this.camera.position.set(this.encounter.player.x, CONFIG.camera.height + this.playerMotion.height, this.encounter.player.z);
+    const spectated = this.coop?.local.health === 0 ? this.coop.remote : null;
+    this.camera.position.set(spectated?.x ?? this.encounter.player.x, CONFIG.camera.height + (spectated?.height ?? this.playerMotion.height), spectated?.z ?? this.encounter.player.z);
     this.camera.rotation.set(this.view.y, this.view.x, 0, 'YXZ');
     this.camera.updateMatrixWorld(true);
     this.raycaster.setFromCamera(this.aim, this.camera);
@@ -345,8 +403,77 @@ export class Game {
   }
   private tracerMaterial = new THREE.MeshBasicMaterial({ color: 0xffdf9b });
 
+  private remoteShoot = (pawn: Pawn, arsenal: Arsenal) => {
+    if (pawn.health <= 0 || !arsenal.fire()) return;
+    this.zombieField.sync(this.encounter); this.scene.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(pawn.x, 1.7 + pawn.height, pawn.z);
+    camera.rotation.set(pawn.pitch, pawn.yaw, 0, 'YXZ'); camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(new THREE.Vector2(), camera); this.raycaster.far = CONFIG.weapon.range;
+    const aim = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0]?.point ?? this.raycaster.ray.at(CONFIG.weapon.range, new THREE.Vector3());
+    const muzzle = new THREE.Vector3(.24, -.18, -.5).applyQuaternion(camera.quaternion).add(camera.position);
+    const center = aim.clone().sub(muzzle).normalize(), right = new THREE.Vector3().crossVectors(center, camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, center).normalize(), gun = arsenal.gun.definition;
+    let landed = false, head = false, killed = false, armorBroken = false;
+    for (let i = 0; i < gun.pellets; i++) {
+      const angle = i * 2.399963229728653, radius = gun.spread * Math.sqrt(i / Math.max(1, gun.pellets - 1));
+      const direction = center.clone().addScaledVector(right, Math.cos(angle) * radius).addScaledVector(up, Math.sin(angle) * radius).normalize();
+      this.raycaster.set(muzzle, direction); const hit = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0];
+      const target = this.zombieField.decode(hit);
+      if (target) {
+        const damage = this.encounter.hit(target.id, target.head, gun.damage * (target.head ? 2 : 1));
+        if (damage) {
+          if (!this.background && damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(target.id, damage.armorHit), direction);
+          if (!this.background && damage.killed && hit) this.blood.burst(hit.point, direction, target.head);
+          landed = true; head ||= target.head; killed ||= damage.killed; armorBroken ||= damage.armorBroken;
+        }
+        this.zombieField.sync(this.encounter); this.scene.updateMatrixWorld(true);
+      }
+      if (!this.background) {
+        const end = hit?.point ?? muzzle.clone().addScaledVector(direction, CONFIG.weapon.range);
+        const tracer = this.addEffect(muzzle.clone().lerp(end, .5), new THREE.Vector3(), new THREE.Vector3(.015, .015, muzzle.distanceTo(end)), 0, .06, 0, false, false, true);
+        tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
+      }
+    }
+    if (landed) this.coop?.sendHit(head, killed, armorBroken);
+    if (!this.background) this.audio.shot();
+  };
+
+  private advanceCoop(delta: number) {
+    const coop = this.coop!;
+    const local = coop.local, controlled = this.phase === 'playing' && this.pointerLocked && local.health > 0;
+    const keys = controlled ? this.keys : new Set<string>();
+    if (coop.host) {
+      this.encounter.update(delta, this.spawnEnemy, step => {
+        if (local.health > 0) {
+          if (this.playerMotion.update(this.encounter.player, this.view.x, keys, step, this.navigation, this.encounter.zombies)) local.health = 0;
+          local.x = this.encounter.player.x; local.z = this.encounter.player.z; local.height = this.playerMotion.height;
+        }
+        local.yaw = this.view.x; local.pitch = this.view.y; local.weapon = this.arsenal.active; local.shots = this.arsenal.shots;
+        coop.advanceRemote(step, this.navigation, this.remoteShoot);
+      });
+      coop.broadcast(delta);
+    } else {
+      coop.sendInput(keys, this.view.x, this.view.y, this.jumpSequence, delta);
+      if (local.health > 0) this.playerMotion.update(this.encounter.player, this.view.x, keys, delta, this.navigation, this.encounter.zombies);
+      const discrepancy = Math.hypot(this.encounter.player.x - local.x, this.encounter.player.z - local.z);
+      if (discrepancy > 1 || !keys.size) {
+        const blend = discrepancy > 2 ? 1 : 1 - Math.exp(-delta * 12);
+        this.encounter.player.x += (local.x - this.encounter.player.x) * blend;
+        this.encounter.player.z += (local.z - this.encounter.player.z) * blend;
+      }
+      for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); this.audio.tone(950, 450, .07, .025); }
+    }
+    this.encounter.health = local.health; this.encounter.lastDamageAt = local.lastDamageAt; this.kills = this.encounter.kills;
+    this.weapon.root.visible = local.health > 0;
+    if (local.health === 0) { this.keys.clear(); this.trigger = false; }
+    this.partner?.update(coop.remote, delta, local.health === 0, this.encounter.elapsed);
+    if (this.encounter.failed) this.endRun();
+  }
+
   private shoot() {
+    if (this.coop?.local.health === 0) return;
     if (this.phase !== 'playing' || !this.weapon.loaded || !this.arsenal.fire()) return;
+    this.coop?.command({ type: 'fire', yaw: this.view.x, pitch: this.view.y });
     this.audio.shot();
     this.flashTime = 0.065;
     this.recoil = Math.min(1, this.recoil + this.firearm.definition.recoil);
@@ -372,7 +499,7 @@ export class Game {
       const targetId = targetHit?.id;
       let killed = false;
       if (pellet === 0) this.lastShot = { muzzle: muzzle.toArray(), direction: direction.toArray(), aimPoint: this.aimPoint.toArray(), impact: end.toArray(), hitTarget: targetId ?? null };
-      if (targetHit) {
+      if (targetHit && (!this.coop || this.coop.host)) {
         const head = targetHit.head;
         const damage = this.encounter.hit(targetHit.id, head, definition.damage * (head ? 2 : 1))!;
         if (damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(targetHit.id, damage.armorHit), direction);
@@ -403,7 +530,7 @@ export class Game {
   private frame = (time: number) => {
     if (this.disposed) return;
     this.frameId = requestAnimationFrame(this.frame);
-    if (document.hidden || (this.phase !== 'playing' && this.phase !== 'breaching' && !this.dirty)) { this.previousTime = 0; return; }
+    if (this.background || ((!this.coop || this.phase === 'failed') && this.phase !== 'playing' && this.phase !== 'breaching' && !this.dirty)) { this.previousTime = 0; return; }
     // 保留 RAF 的刷新同步，但高刷新率显示器上最多绘制 60 帧。
     if (this.previousTime && time - this.previousTime < 1000 / 60 - 0.5) return;
     const rawDelta = this.previousTime ? (time - this.previousTime) / 1000 : 0;
@@ -415,7 +542,7 @@ export class Game {
     this.frameCount++;
     this.fpsTime += rawDelta;
     if (this.fpsTime >= 1) { this.fps = Math.round(this.frameCount / this.fpsTime); this.fpsTime = 0; this.frameCount = 0; }
-    if (this.phase === 'playing' && this.pointerLocked) {
+    if ((this.phase === 'playing' && this.pointerLocked) || (this.coop && this.phase !== 'failed')) {
       const previousGun = this.firearm;
       const previousActive = this.arsenal.active;
       const previousAmmo = this.firearm.ammo;
@@ -449,7 +576,8 @@ export class Game {
       this.blood.update(delta);
       this.armorEffects.update(delta);
       const previousHealth = this.encounter.health;
-      this.encounter.update(delta, this.spawnEnemy, step => {
+      if (this.coop) this.advanceCoop(delta);
+      else this.encounter.update(delta, this.spawnEnemy, step => {
         const drowned = this.playerMotion.update(this.encounter.player, this.view.x, this.keys, step, this.navigation, this.encounter.zombies);
         this.encounter.playerHeight = this.playerMotion.height;
         if (drowned) this.encounter.drown();
@@ -489,7 +617,8 @@ export class Game {
   };
 
   private publish() {
-    this.callbacks.onState({ wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
+    const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0 } : undefined;
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -511,6 +640,7 @@ export class Game {
       return { x: (p.x + 1) / 2 * this.width, y: (1 - p.y) / 2 * this.height };
     };
     return {
+      coop: this.coop ? { host: this.coop.host, players: this.coop.players.map(p => ({ ...p })), local: this.coop.local.id } : null,
       wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission,
       jump: { height: this.playerMotion.height, velocity: this.playerMotion.velocity, grounded: this.playerMotion.grounded },
       overWater: isWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),
@@ -529,6 +659,7 @@ export class Game {
   }
 
   dispose() {
+    this.stopCoop();
     this.disposed = true;
     cancelAnimationFrame(this.frameId);
     this.observer.disconnect();
@@ -540,6 +671,7 @@ export class Game {
     this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLost);
     window.removeEventListener('pointerup', this.releaseTrigger);
     window.removeEventListener('blur', this.blur);
+    window.removeEventListener('focus', this.focus);
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
     document.removeEventListener('pointerlockchange', this.pointerLockChange);

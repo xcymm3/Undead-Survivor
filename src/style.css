@@ -350,6 +350,39 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 @media (max-width: 900px) { .mode-menu h1 { display: flex; flex-direction: column; gap: 0; } .mode-menu h1 br, .mode-menu h1 b { display: none; } }
 
 .survival-clock > small { display: block; margin-top: 5px; color: var(--color-muted); font-size: 10px; }
+.multiplayer-button { width: 100%; margin-top: 12px; padding: 13px; border: 1px solid #91a77f; background: #263d32; color: #e4eadc; cursor: pointer; }
+.multiplayer-screen { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; padding: 24px; background: #0d1918ed; overflow: auto; }
+.multiplayer-panel { width: min(650px, 100%); max-height: 100%; overflow-y: auto; padding: 30px 36px; background: #1e3027; border: 1px solid #4f6652; box-shadow: 0 20px 100px #0006; }
+.multiplayer-panel h2 { font: 600 40px var(--font-display); margin: 8px 0 12px; }
+.multiplayer-panel p { color: #b1bcaa; font-size: 13px; line-height: 1.7; }
+.multiplayer-panel button:disabled { opacity: .45; cursor: wait; }
+.multiplayer-panel input { width: 100%; min-width: 0; background: #14231d; color: #e4eadc; border: 1px solid #60735d; padding: 11px; outline-offset: 3px; }
+.multiplayer-panel label { font-size: 12px; color: #b1bcaa; }
+.network-note { margin: 22px 0; padding: 18px; background: #14231d; font-size: 13px; line-height: 1.8; }
+.network-identity { border-block: 1px solid #496047; padding: 12px 0; }
+.room-create { display: grid; grid-template-columns: 1fr 150px; gap: 8px 12px; }
+.room-create label { grid-column: 1 / -1; }
+.room-create .start-button { margin: 0; padding: 10px 16px; }
+.room-search { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; }
+.room-search h3 { font-size: 15px; }
+.room-list { background: #14231d; padding: 4px 14px; max-height: 160px; overflow-y: auto; }
+.room-list > div { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; gap: 14px; border-bottom: 1px solid #334b3b; font-size: 13px; }
+.room-list small { margin-left: 12px; color: #9cae93; }
+.room-list button, .room-direct button { background: #334d3b; border: 1px solid #667c59; color: #e4eadc; padding: 10px; white-space: nowrap; cursor: pointer; }
+.room-direct { margin: 20px 0 10px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.room-current ul { padding: 0; list-style: none; }
+.room-current li { display: flex; justify-content: space-between; padding: 16px; margin-block: 8px; background: #14231d; }
+.room-current li b { color: #bdcb91; font-size: 12px; }
+.room-current code { user-select: all; }
+.network-error { color: #f3a18d !important; }
+.coop-team { position: absolute; z-index: 5; left: 36px; top: 300px; width: 220px; padding: 14px; background: #17271de6; pointer-events: none; }
+.coop-team > div { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; font-size: 11px; }
+.coop-team > div > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coop-team progress { grid-column: 1 / -1; width: 100%; height: 4px; accent-color: #80b8bb; }
+.coop-team .fallen { color: #c88d7b; }
+.coop-spectating { position: absolute; z-index: 5; top: 48%; left: 50%; transform: translateX(-50%); display: grid; gap: 12px; text-align: center; padding: 18px 24px; background: #162820de; pointer-events: none; }
+.coop-spectating span { font-size: 12px; color: #b1bcaa; }
+@media (max-height: 720px) { .multiplayer-panel { padding: 18px 28px; } .multiplayer-panel h2 { font-size: 28px; } .coop-team { top: 285px; padding: 10px; } }
 .terrain-hint { position: absolute; bottom: 54px; left: 36px; font-size: 11px; color: var(--color-ink); }
 .terrain-hint small { display: inline; margin-left: 12px; color: var(--color-muted); font-size: 10px; }
 @media (max-width: 900px) { .terrain-hint { left: 18px; bottom: 64px; font-size: 10px; } .terrain-hint small { display: block; margin: 5px 0 0; font-size: 8px; } .survival-clock > small { font-size: 8px; } .horde-status { top: 280px; } }

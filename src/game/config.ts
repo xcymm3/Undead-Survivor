@@ -37,6 +37,7 @@ export interface RunResult {
   endedAt: string;
 }
 export interface GameSnapshot {
+  coop?: { host: boolean; localId: string; players: { id: string; name: string; health: number }[]; spectating: boolean };
   wave: number; wavesCleared: number; waveTotal: number; waveSpawned: number; intermission: number; grounded: boolean; playerHeight: number;
   health: number; hurt: boolean; pointerLocked: boolean;
   weaponsReady: boolean; weaponIndex: number; requestedWeapon: number; switching: boolean; reloadQueued: boolean; inventory: number[];

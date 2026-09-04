@@ -6,6 +6,7 @@ import type { GameMode, GameSnapshot } from './game/config';
 import { formatDuration, LeaderboardStore, personalRecord } from './game/leaderboard';
 import type { PersonalRecord } from './game/leaderboard';
 import { BreachOverlay, DeploymentPanel, LeaderboardTable, ResultPanel } from './ui/SessionPanels';
+import { MultiplayerPanel } from './ui/MultiplayerPanel';
 
 const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false };
 
@@ -36,6 +37,7 @@ export function App() {
   const [state, setState] = useState(initialState);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(false);
+  const [multiplayer, setMultiplayer] = useState(false);
   const [feedback, setFeedback] = useState<{ head: boolean; killed: boolean; armorBroken: boolean; key: number } | null>(null);
   const [record, setRecord] = useState<PersonalRecord | null>(null);
   const hitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -66,8 +68,15 @@ export function App() {
       setError('无法启动 3D 场景。请使用支持 WebGL 2 的桌面版 Chrome 或 Edge，并开启硬件加速。');
     }
     const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
+    const offSteam = window.steamCoop?.onEvent(event => {
+      if (event.type === 'start') { setError(''); setFeedback(null); setMultiplayer(false); game.current?.beginCoop(event.match, data => window.steamCoop?.send(data)); }
+      if (event.type === 'packet') game.current?.receiveCoop(event.from, event.data);
+      if (event.type === 'left') { game.current?.menu(); setError(event.message); setMultiplayer(true); }
+      if (event.type === 'error') setError(event.message);
+    });
     document.addEventListener('fullscreenchange', onFullscreen);
     return () => {
+      offSteam?.();
       clearTimeout(hitTimer.current);
       document.removeEventListener('fullscreenchange', onFullscreen);
       delete window.__undeadTower;
@@ -95,6 +104,10 @@ export function App() {
   };
 
   const weapon = WEAPONS[state.weaponIndex];
+  const leaveCoop = async () => {
+    try { await window.steamCoop?.leave(); } catch (cause) { setError(String(cause)); }
+    game.current?.menu(); setMultiplayer(true);
+  };
   const pendingWeapon = state.requestedWeapon !== state.weaponIndex;
 
   return <main className={`game-shell phase-${state.phase}`}>
@@ -103,6 +116,7 @@ export function App() {
     </div>
     <div className="vignette" aria-hidden="true" /><div className={`damage-vignette ${state.hurt ? 'active' : ''}`} aria-hidden="true" />
 
+    {multiplayer && <MultiplayerPanel notice={error} close={() => setMultiplayer(false)} />}
     <header className="topbar" inert={state.phase === 'breaching'}>
       <div className="brand"><span className="brand-mark"><Icon name="tower" size={27} /></span><div>UNDEAD SURVIVOR<small>灰松哨站 · PINE RIDGE</small></div></div>
       {state.phase !== 'ready' && <div className="compass" aria-label="当前朝向"><div className="compass-ticks"><b>{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round((((-state.yaw % 360) + 360) % 360) / 45) % 8]}</b><span>{Math.round(((-state.yaw % 360) + 360) % 360)}°</span></div><span className="compass-notch" /><small>北 / 东侧来袭</small></div>}
@@ -123,7 +137,7 @@ export function App() {
         <p className="intro-description">森林边缘有了动静。<br />跨过河流，守住一波又一波尸群。</p>
         <div className="intro-controls"><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> 开火</span><span><kbd>R</kbd> 换弹</span><span><kbd>1–6 / 滚轮</kbd> 切枪</span></div>
       </div>
-      <DeploymentPanel mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
+      <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
       {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在准备六款枪械…</div>}
       <div className="intro-foot"><span className="signal-dot" /> 自由移动 · 僵尸生存 <span className="intro-foot-right">有限场地 / LOW-POLY WORLD</span></div>
     </section>}
@@ -141,10 +155,28 @@ export function App() {
       <footer className="play-footer"><div><span className="signal-dot" /><span>{state.fps} FPS</span><span className="footer-divider" /><span>自由视角 · 44 × 62 m</span></div><div><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> {weapon.automatic ? '按住连发' : '单次射击'}</span><span><kbd>ESC</kbd> 暂停</span></div></footer>
     </div>}
 
-    {state.phase === 'paused' && !settings && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><span className="label">WATCH ON HOLD</span><h2>哨站已暂停</h2><p>准备好后，继续移动与战斗。{state.mode === 'survival' && '坚守计时已暂停。'}</p><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button><small>按 ESC 继续</small></div></section>}
+    {state.phase === 'paused' && !settings && !state.coop && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><span className="label">WATCH ON HOLD</span><h2>哨站已暂停</h2><p>准备好后，继续移动与战斗。{state.mode === 'survival' && '坚守计时已暂停。'}</p><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button><small>按 ESC 继续</small></div></section>}
 
+    {state.coop && state.phase !== 'failed' && <aside className="coop-team" aria-label="双人小队">
+      <span className="label">双人协作 · {state.coop.host ? '房主' : '队员'}</span>
+      {state.coop.players.map(player => <div key={player.id} className={player.health === 0 ? 'fallen' : ''}>
+        <span>{player.name}{player.id === state.coop!.localId ? '（你）' : ''}</span><b>{player.health === 0 ? '已阵亡' : `${player.health} HP`}</b>
+        <progress max={100} value={player.health} aria-label={`${player.name}生命值`} />
+      </div>)}
+    </aside>}
+    {state.coop?.spectating && state.phase === 'playing' && <div className="coop-spectating" role="status"><strong>你已阵亡 · 正在观战队友</strong><span>队友仍可继续守波，两人都阵亡才结束。</span></div>}
+    {state.coop && state.phase === 'paused' && !settings && <section className="pause-screen" aria-label="联机菜单"><div className="pause-content">
+      <span className="label">TEAM STILL IN ACTION</span><h2>联机对局仍在继续</h2><p>打开菜单不会暂停尸群，你仍会受到攻击。</p>
+      <button className="start-button" onClick={() => game.current?.start()}>返回{state.coop.spectating ? '观战' : '战斗'} <Icon name="arrow" /></button>
+      <button className="text-button" onClick={leaveCoop}>离开对局</button>
+    </div></section>}
+    {state.coop && state.phase === 'failed' && state.result && <section className="pause-screen" aria-label="双人结算"><div className="pause-content">
+      <span className="label">BOTH SURVIVORS DOWN</span><h2>小队全员阵亡</h2><p>共同守住 <strong>{state.result.waves}</strong> 波 · 击杀 <strong>{state.result.kills}</strong> 只</p>
+      <p>坚守 {formatDuration(state.result.duration)} · 双人成绩不计入单人排行榜</p>
+      <button className="start-button" onClick={leaveCoop}>返回多人大厅 <Icon name="arrow" /></button>
+    </div></section>}
     {state.phase === 'breaching' && state.breach && <BreachOverlay breach={state.breach} />}
-    {state.phase === 'failed' && state.result && <ResultPanel result={state.result} entries={entries} saved={saved} record={state.mode === 'survival' ? record : null} breach={state.breach} onRetry={() => game.current?.reset()} onMenu={() => game.current?.menu()} />}
+    {state.phase === 'failed' && state.result && !state.coop && <ResultPanel result={state.result} entries={entries} saved={saved} record={state.mode === 'survival' ? record : null} breach={state.breach} onRetry={() => game.current?.reset()} onMenu={() => game.current?.menu()} />}
 
     <dialog ref={scoreDialog} className="settings-dialog leaderboard-dialog" aria-labelledby="leaderboard-title" onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}>
       <div className="dialog-heading"><div><span className="label">LOCAL RECORDS</span><h2 id="leaderboard-title">波次排行榜</h2></div><button className="icon-button" onClick={() => scoreDialog.current?.close()} aria-label="关闭排行榜"><Icon name="close" /></button></div>
@@ -162,7 +194,7 @@ export function App() {
       <button className="start-button dialog-done" onClick={closeSettings}>返回哨站 <Icon name="arrow" /></button>
     </dialog>
 
-    {error && <div className="error-notice" role="alert"><p>{error}</p><button className="text-button" onClick={() => location.reload()}>重新加载</button></div>}
+    {error && !multiplayer && <div className="error-notice" role="alert"><p>{error}</p><button className="text-button" onClick={() => setError('')}>关闭提示</button><button className="text-button" onClick={() => location.reload()}>重新加载</button></div>}
     <div className="mobile-notice">建议使用电脑横屏，搭配鼠标和键盘游玩。</div>
   </main>;
 }

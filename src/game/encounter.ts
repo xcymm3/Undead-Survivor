@@ -2,10 +2,11 @@ import { ARMOR_SPAWNS, ATTACK, PLAYER, CONFIG, FIXED_DIFFICULTY, WAVES, SURVIVAL
 import type { Difficulty, GameMode, ZombieKind } from './config';
 import { CrowdMovement } from './movement';
 import type { Navigation } from './navigation';
+import type { Pawn } from '../multiplayer/types';
 
 export interface Position { x: number; z: number; }
 export interface SpawnPosition extends Position { spawnZone?: string; }
-export interface Zombie extends SpawnPosition { id: number; kind: ZombieKind; health: number; maxHealth: number; armorHealth: number; downTime: number; bornAt: number; avoidance?: number; heading?: number; attacking?: boolean; attackTime?: number; }
+export interface Zombie extends SpawnPosition { id: number; kind: ZombieKind; health: number; maxHealth: number; armorHealth: number; downTime: number; bornAt: number; avoidance?: number; heading?: number; attacking?: boolean; attackTime?: number; attackTarget?: string; }
 export const PRACTICE_POSITIONS: Position[] = [{ x: -5.8, z: -9.5 }, { x: 0.15, z: -22 }, { x: 5.4, z: -21 }, { x: -1, z: -31 }];
 
 export function waveSettings(wave: number) {
@@ -42,11 +43,18 @@ export class Encounter {
   private normalsSinceCone = 0;
   private conesSinceBucket = 0;
   private movement = new CrowdMovement();
+  combatants: Pawn[] | null = null;
+  private coopMovement = new Map<string, CrowdMovement>();
+  setCombatants(players: Pawn[], navigations: Navigation[]) {
+    this.combatants = players; this.coopMovement.clear();
+    players.forEach((p, i) => this.coopMovement.set(p.id, new CrowdMovement(navigations[i])));
+  }
 
   constructor() { this.reset('practice', FIXED_DIFFICULTY); }
   setNavigation(navigation: Navigation) { this.movement = new CrowdMovement(navigation); }
 
   reset(mode: GameMode, difficulty: Difficulty) {
+    this.combatants = null; this.coopMovement.clear();
     this.mode = mode; this.difficulty = difficulty;
     this.player = { x: SURVIVAL.playerX, z: SURVIVAL.playerZ }; this.health = PLAYER.health; this.lastDamageAt = -Infinity;
     this.elapsed = 0; this.failed = false; this.kills = 0; this.spawnCredit = 0; this.nextId = 0; this.totalSpawned = 0;
@@ -124,20 +132,33 @@ export class Encounter {
       if (this.mode === 'practice') continue;
       this.zombies = this.zombies.filter(z => z.health > 0 || z.downTime > 0);
       const speed = this.pressure.speed;
-      const movement = this.movement.advance(this.zombies, step, speed, this.player);
-      this.elapsed += movement.duration;
+      const living = this.combatants?.filter(p => p.health > 0);
+      if (living && !living.length) { this.failed = true; this.failureCause ??= 'zombie'; return; }
+      const targets = new Map<number, Pawn>();
+      if (living) {
+        for (const z of this.zombies) if (z.health > 0) targets.set(z.id, living.reduce((a, b) =>
+          Math.hypot(z.x - a.x, z.z - a.z) <= Math.hypot(z.x - b.x, z.z - b.z) ? a : b));
+        for (const p of living) this.coopMovement.get(p.id)!.advance(this.zombies.filter(z => targets.get(z.id)?.id === p.id), step, speed, p);
+      } else this.movement.advance(this.zombies, step, speed, this.player);
+      this.elapsed += step;
       for (const zombie of this.zombies) {
         if (zombie.health <= 0) continue;
-        const touching = this.playerHeight < 1.1 && Math.hypot(zombie.x - this.player.x, zombie.z - this.player.z) <= SURVIVAL.contactRadius + 1e-6;
+        const target = targets.get(zombie.id);
+        const position = target ?? this.player;
+        if (target && zombie.attackTarget !== target.id) { zombie.attackTarget = target.id; zombie.attackTime = 0; }
+        const touching = (target ? target.health > 0 && target.height < 1.1 : this.playerHeight < 1.1)
+          && Math.hypot(zombie.x - position.x, zombie.z - position.z) <= SURVIVAL.contactRadius + 1e-6;
         zombie.attacking = touching;
         if (!touching) { zombie.attackTime = 0; continue; }
-        zombie.heading = Math.atan2(this.player.x - zombie.x, this.player.z - zombie.z);
+        zombie.heading = Math.atan2(position.x - zombie.x, position.z - zombie.z);
         const before = zombie.attackTime ?? 0;
         zombie.attackTime = before + step;
         if (before < ATTACK.windup && zombie.attackTime + 1e-9 >= ATTACK.windup) {
-          this.health = Math.max(0, this.health - ATTACK.damage);
-          this.lastDamageAt = this.elapsed;
-          if (this.health === 0) { this.failed = true; this.failureCause = 'zombie'; this.breachedId = zombie.id; return; }
+          if (target) { target.health = Math.max(0, target.health - ATTACK.damage); target.lastDamageAt = this.elapsed; }
+          else { this.health = Math.max(0, this.health - ATTACK.damage); this.lastDamageAt = this.elapsed; }
+          if (target ? this.combatants!.every(p => p.health === 0) : this.health === 0) {
+            this.failed = true; this.failureCause = 'zombie'; this.breachedId = zombie.id; return;
+          }
         }
         if (zombie.attackTime + 1e-9 >= ATTACK.duration) zombie.attackTime = Math.max(0, zombie.attackTime - ATTACK.duration);
       }
