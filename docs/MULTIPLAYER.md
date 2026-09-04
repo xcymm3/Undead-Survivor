@@ -47,4 +47,14 @@ npm run test:desktop
 
 正式两端验收应检查：搜索/房间号加入、同时开局、双方移动跳跃与开枪、两端同一只僵尸死亡、完整升波、单人死亡后继续、全员死亡结算，以及退出 Steam/断网后的提示。
 
+## 本机验收记录（2026-09-04）
+
+- 92 项单元测试通过，包含延迟射击不覆盖最新移动朝向，以及静默启动、重复启动不抢焦点、启动失败不弹窗。
+- 两项无界面联机端到端测试通过：创建/搜索/加入、房主开局、双方射击清完一波、后台继续模拟但停止绘图、后台换弹/切枪、单人阵亡观战、全员阵亡同步结算、无单人榜写入。
+- 两个测试页面共用一个无界面浏览器，交接控制时先释放另一页的鼠标锁；不激活用户的桌面窗口。
+- 实际 Electron 静默冒烟测试通过，检查窗口不可见、未聚焦、不可聚焦且静音；当前 Steam 未登录，480 配置及失败提示正常。
+- TypeScript 和网页生产构建通过。保留此前单人回归结果；本轮没有运行便携版，也没有重新打包 EXE。
+
+以上本地双端测试使用测试通道，不能替代上文所述的两账号 Steam 实际联网验收。
+
 依据：[Steam 官方示例与 App ID 480](https://partner.steamgames.com/doc/sdk/api/example)、[Steam 大厅匹配](https://partner.steamgames.com/doc/features/multiplayer/matchmaking)、[steamworks.js 源码](https://github.com/ceifa/steamworks.js)。

@@ -52,6 +52,11 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await host.getByRole('button', { name: '开始双人游戏' }).click();
     await expect.poll(async () => (await snapshot(guest)).coop?.players.length).toBe(2);
     async function control(page: Page) {
+      // 两个测试客户端共用一个无界面浏览器，先释放另一页的鼠标锁，避免同时争抢。
+      for (const other of pages) if (other !== page) {
+        await other.evaluate(() => { document.exitPointerLock(); window.dispatchEvent(new Event('blur')); });
+        await expect.poll(async () => (await snapshot(other)).pointerLocked).toBe(false);
+      }
       await page.bringToFront();
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       if ((await snapshot(page)).phase === 'paused') await page.getByRole('button', { name: '返回战斗' }).click();
