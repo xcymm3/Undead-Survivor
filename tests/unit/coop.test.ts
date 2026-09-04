@@ -82,4 +82,16 @@ describe('双人权威模拟', () => {
     host.advanceRemote(.2, nav, shoot); expect(host.remoteArsenal.shots).toBe(2);
     host.advanceRemote(.2, nav, shoot); expect(host.remoteArsenal.shots).toBe(3);
   });
+  it('延迟射击按开枪时方向判定，但不能覆盖玩家最新的转向与移动方向', () => {
+    const { host, guest } = pair(); const shotAngles: number[] = [];
+    const shoot = (pawn: { yaw: number }) => { if (host.remoteArsenal.fire()) shotAngles.push(pawn.yaw); };
+    guest.command({ type: 'fire', yaw: 0, pitch: 0 }); host.advanceRemote(.01, nav, shoot);
+    guest.command({ type: 'fire', yaw: .1, pitch: .2 });
+    guest.sendInput(new Set(['KeyW']), Math.PI / 2, 0, 0, .1);
+    host.advanceRemote(.2, nav, shoot);
+    expect(shotAngles).toEqual([0, .1]); expect(host.remote.yaw).toBe(Math.PI / 2); expect(host.remote.pitch).toBe(0);
+    const x = host.remote.x, z = host.remote.z;
+    host.advanceRemote(.1, nav, shoot);
+    expect(host.remote.x).toBeLessThan(x); expect(host.remote.z).toBeCloseTo(z);
+  });
 });

@@ -81,7 +81,8 @@ export class CoopSession {
         this.commands.shift();
         if (command.type === 'weapon') this.remoteArsenal.request(command.index);
         else if (command.type === 'reload') this.remoteArsenal.reload();
-        else if (command.type === 'fire') { this.remote.yaw = command.yaw; this.remote.pitch = command.pitch; fire(this.remote, this.remoteArsenal); }
+        // 射击方向属于该发子弹，不能把排队期间收到的新移动朝向改回旧值。
+        else if (command.type === 'fire') fire({ ...this.remote, yaw: command.yaw, pitch: command.pitch }, this.remoteArsenal);
       }
     }
     if (this.remote.health === 0) this.commands = [];
