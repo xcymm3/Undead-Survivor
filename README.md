@@ -41,7 +41,7 @@
 
 ## 在本地开始游戏
 
-Windows 便携版可直接双击 `release/Undead Survivor-0.5.0.exe` 离线启动，无需安装开发环境；操作与数据保存说明见 [便携版说明](docs/PORTABLE.md)。
+Windows 便携版可直接双击 `release/Undead Survivor-0.6.0.exe`，无需安装开发环境。单人可离线游玩，Steam 双人合作请看 [EXE 联机说明](docs/MULTIPLAYER.md)；分发与数据保存见 [便携版说明](docs/PORTABLE.md)。以下步骤面向从源码运行的开发者。
 
 1. 安装 [Node.js](https://nodejs.org/) **22.12 或更高版本**，安装时保留 npm。
 2. 在本仓库页面点击 **Code → Download ZIP**，解压后进入包含 `package.json` 的文件夹。
@@ -58,11 +58,11 @@ npm run dev
 
 游玩期间保持终端窗口打开；结束后在终端按 `Ctrl+C` 即可停止。若终端显示了不同端口，请以终端中的本地地址为准。画面无法加载时，请确认浏览器已开启硬件加速。
 
-## Steam 双人协作（源码测试版）
+## Steam 双人协作（0.6.0 EXE 测试版）
 
 首页增加「多人模式」，可以创建、搜索或按房间号加入两人房间，由房主开始。两人共同守波，各有 100 点血量；一人阵亡后观战，两人都阵亡才结束。联机菜单和后台不会暂停对局，双人成绩不写入单人排行榜。
 
-两台 Windows 电脑分别登录不同的 Steam 账号，在源码目录安装依赖后运行 `npm run desktop`，使用 Spacewar App ID 480 测试。本次没有重新打包 EXE，现有 `0.5.0` 便携版仍是单人版本。房间流程、同步设计与验收边界见 [联机说明](docs/MULTIPLAYER.md)。
+两台 Windows 电脑分别登录不同的 Steam 账号，双击相同的 `Undead Survivor-0.6.0.exe`，通过 Spacewar App ID 480 测试。把这份 EXE 和 `release/联机说明-0.6.0.txt` 发给朋友即可，无需安装开发环境。旧 0.5.0 EXE 仍是单人版本。房间流程和常见问题见 [EXE 联机说明](docs/MULTIPLAYER.md)。目前已做本机双客户端模拟和静默桌面验证，尚未完成跨电脑、双 Steam 账号的实际联网验收。
 
 ## 开发验证
 
