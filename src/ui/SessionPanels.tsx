@@ -14,7 +14,7 @@ export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, disabled
       <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}><span className="mode-radio" /><span>正式模式<small>僵尸逼近 · 挑战坚守纪录</small></span><b>02</b></button>
     </div>
     <div className="deployment-detail">
-      {mode === 'survival' ? <><span className="practice-note">困难难度 · 守住防线</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。<br />每 {ARMOR_SPAWNS.normalPerCone} 普 → 1 路障；每 {ARMOR_SPAWNS.conesPerBucket} 路障 → 1 铁桶。<br /><strong>别让僵尸逼近哨塔，否则防守失败。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />练习不会失败，也不会计入排行榜。</p></>}
+      {mode === 'survival' ? <><span className="practice-note">困难难度 · 守住防线</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。<br />每 {ARMOR_SPAWNS.normalPerCone} 普 → 1 路障；每 {ARMOR_SPAWNS.conesPerBucket} 路障 → 1 铁桶。<br /><strong>初始生命 100，躲避近身攻击，血量归零结束。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />练习不会失败，也不会计入排行榜。</p></>}
     </div>
     <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}<small>{mode === 'practice' ? 'ENTER THE RANGE' : 'HOLD THE LINE'}</small></span><span aria-hidden="true">→</span></button>
     <button className="leaderboard-link" onClick={onLeaderboard}>查看排行榜 <span>本机 TOP 10 ↗</span></button>
@@ -29,9 +29,9 @@ export function LeaderboardTable({ entries, difficulty, highlightId }: { entries
 
 export function BreachOverlay({ breach }: { breach: NonNullable<GameSnapshot['breach']> }) {
   return <section className="breach-review" aria-label="突破者特写">
-    <div className="breach-title"><span className="label">WATCH LOST</span><h2>防线失守</h2><p>僵尸已经逼近哨塔</p></div>
+    <div className="breach-title"><span className="label">WATCH LOST</span><h2>防线失守</h2><p>生命值已耗尽</p></div>
     <div className="breach-culprit" data-testid="breached-zombie" data-zombie-id={breach.id}>
-      <span>突破者</span><strong>{ZOMBIE_TYPES[breach.kind].label}</strong><small>从{breach.side}突破哨站</small>
+      <span>突破者</span><strong>{ZOMBIE_TYPES[breach.kind].label}</strong><small>从{breach.side}发动致命攻击</small>
     </div>
   </section>;
 }
@@ -40,7 +40,7 @@ export function ResultPanel({ result, entries, saved, record, breach, onRetry, o
   const focus = useRef<HTMLHeadingElement>(null);
   useEffect(() => { focus.current?.focus({ preventScroll: true }); }, []);
   const rank = entries.filter(r => r.difficulty === result.difficulty).findIndex(r => r.id === result.id);
-  const culprit = breach ? `${ZOMBIE_TYPES[breach.kind].label}从${breach.side}突破哨站` : '僵尸已逼近哨塔';
+  const culprit = breach ? `${ZOMBIE_TYPES[breach.kind].label}从${breach.side}发动致命攻击` : '生命值已耗尽';
   return <section className="result-screen" aria-label="游戏结束"><div className="result-panel">
     <div className="result-summary"><span className="label">PERIMETER BREACHED</span><h2 ref={focus} tabIndex={-1}>防线失守</h2><p>{culprit}，游戏失败。</p>
       <span className="result-time-label">你坚守了 · {DIFFICULTIES[result.difficulty].label}难度</span><strong className="result-time" data-testid="survival-result">{formatDuration(result.duration, true)}</strong>

@@ -1,11 +1,11 @@
 {
-  "name": "undead-tower",
+  "name": "undead-survivor",
   "version": "0.5.0",
   "private": true,
   "type": "module",
   "main": "desktop/main.cjs",
-  "author": "Undead Tower",
-  "description": "Undead Tower — 固定朝向、有限视角的低多边形第一人称射击游戏",
+  "author": "Undead Survivor",
+  "description": "Undead Survivor — 自由移动、有限场地的低多边形第一人称射击游戏",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5175",
     "build": "tsc -b && vite build",

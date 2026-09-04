@@ -3,6 +3,7 @@ dist/
 release/
 recordings/
 Undead Tower Data/
+Undead Survivor Data/
 test-results/
 playwright-report/
 *.log

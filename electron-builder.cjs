@@ -3,8 +3,8 @@ process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL ??= '5';
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'com.undeadtower.game',
-  productName: 'Undead Tower',
+  appId: 'com.undeadsurvivor.game',
+  productName: 'Undead Survivor',
   directories: { output: 'release', buildResources: 'desktop' },
   files: ['dist/**/*', 'desktop/main.cjs', 'desktop/icon.ico', 'package.json', '!node_modules/**/*'],
   asar: true,
@@ -17,5 +17,5 @@ module.exports = {
     requestedExecutionLevel: 'asInvoker',
     signExecutable: false,
   },
-  portable: { artifactName: 'Undead Tower ${version}.${ext}', requestExecutionLevel: 'user', unpackDirName: false },
+  portable: { artifactName: 'Undead Survivor ${version}.${ext}', requestExecutionLevel: 'user', unpackDirName: false },
 };

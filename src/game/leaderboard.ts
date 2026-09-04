@@ -1,7 +1,7 @@
 import type { Difficulty, RunResult } from './config';
 
-// 开局护甲新比例单独记榜；旧 v1 与 armor-v2 数据保留在原键。
-export const LEADERBOARD_KEY = 'undead-tower.leaderboard.armor-v3';
+// 自由移动生存模式单独记榜，避免与原哨塔规则的成绩混合。
+export const LEADERBOARD_KEY = 'undead-survivor.leaderboard.v1';
 type StoragePort = Pick<Storage, 'getItem' | 'setItem'>;
 export interface PersonalRecord { status: 'first' | 'new' | 'tied' | 'chasing'; previous: number | null; difference: number; }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cube } from './geometry';
-import { SURVIVAL } from './config';
+import { ATTACK, SURVIVAL } from './config';
 import type { ZombieKind } from './config';
 import type { Encounter, Zombie } from './encounter';
 
@@ -72,15 +72,18 @@ export class ZombieField extends THREE.InstancedMesh {
     this.count = this.enemies.length * PARTS.length;
     this.enemies.forEach((zombie, index) => {
       const culprit = zombie.id === encounter.breachedId;
-      const lunge = culprit ? Math.sin(Math.PI * Math.min(1, breachProgress / 0.8)) : 0;
-      const moving = encounter.mode === 'survival' && zombie.health > 0;
+      const attackTime = zombie.attackTime ?? 0;
+      const attack = zombie.attacking ? (attackTime <= ATTACK.windup
+        ? attackTime / ATTACK.windup : Math.max(0, 1 - (attackTime - ATTACK.windup) / 0.35)) : 0;
+      const lunge = culprit ? Math.sin(Math.PI * Math.min(1, breachProgress / 0.8)) : attack;
+      const moving = encounter.mode === 'survival' && zombie.health > 0 && !zombie.attacking;
       const stride = moving ? Math.sin((encounter.elapsed - zombie.bornAt + (culprit ? breachProgress * 1.4 : 0)) * 5 + zombie.id * 2) : 0;
       const downDuration = encounter.mode === 'practice' ? 3 : 0.85;
       const fall = zombie.health === 0 ? Math.min(Math.PI / 2, (downDuration - zombie.downTime) * 5) : 0;
       this.root.position.set(zombie.x, moving ? Math.abs(stride) * 0.025 : 0, zombie.z);
-      const goal = { x: SURVIVAL.playerX, z: SURVIVAL.playerZ };
+      const goal = encounter.player;
       this.root.rotation.set(-fall, encounter.mode === 'survival' ? zombie.heading ?? Math.atan2(goal.x - zombie.x, goal.z - zombie.z) : 0, 0, 'YXZ');
-      if (culprit) {
+      if (culprit || zombie.attacking) {
         this.root.rotation.y = Math.atan2(goal.x - zombie.x, goal.z - zombie.z);
         this.root.rotation.x += lunge * 0.16;
         this.root.position.x += Math.sin(this.root.rotation.y) * lunge * 0.3;
@@ -90,7 +93,7 @@ export class ZombieField extends THREE.InstancedMesh {
       PARTS.forEach((part, partIndex) => {
         this.part.position.set(...part.position);
         this.part.position.z += stride * (part.limb ?? 0) * 0.12;
-        if (part.limb && Math.abs(part.limb) < 1) this.part.position.z += lunge * 0.28;
+        if (part.limb && Math.abs(part.limb) < 1) { this.part.position.z += lunge * 0.28; this.part.position.y += Math.sin(lunge * Math.PI) * 0.16; }
         this.part.rotation.set(stride * (part.limb ?? 0) * 0.14, 0, 0);
         this.part.scale.set(...part.size);
         if (part.kind && part.kind !== zombie.kind) this.part.scale.setScalar(0);
@@ -123,8 +126,9 @@ export class ZombieField extends THREE.InstancedMesh {
   override raycast(raycaster: THREE.Raycaster, intersections: THREE.Intersection[]) {
     this.enemies.forEach((zombie, index) => {
       if (zombie.health <= 0) return;
-      this.broadBox.min.set(zombie.x - 1, -0.1, zombie.z - 1);
-      this.broadBox.max.set(zombie.x + 1, 2.9, zombie.z + 1);
+      // 扑击时躯干前倾、手臂伸出，粗筛必须包含动画后的手部。
+      this.broadBox.min.set(zombie.x - 1.5, -0.1, zombie.z - 1.5);
+      this.broadBox.max.set(zombie.x + 1.5, 2.9, zombie.z + 1.5);
       if (!raycaster.ray.intersectsBox(this.broadBox)) return;
       let nearest: THREE.Intersection | undefined;
       for (let partIndex = 0; partIndex < PARTS.length; partIndex++) {

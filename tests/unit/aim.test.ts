@@ -1,37 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { Vector2, Vector3 } from 'three';
-import { dampView, pointerToNdc, weaponQuaternion } from '../../src/game/aim';
+import { Vector3 } from 'three';
+import { weaponQuaternion } from '../../src/game/aim';
+import { turnView } from '../../src/game/player';
 import { CONFIG } from '../../src/game/config';
-
-describe('有限视角契约', () => {
-  it('绝对屏幕坐标映射，越界输入仍被钳制', () => {
-    expect(pointerToNdc(720, 450, 1440, 900).toArray()).toEqual([0, 0]);
-    expect(pointerToNdc(1440, 0, 1440, 900).toArray()).toEqual([1, 1]);
-    expect(pointerToNdc(-9999, 9999, 1440, 900).toArray()).toEqual([-1, -1]);
+describe('自由视角与枪口瞄准', () => {
+  it('水平累积转向超过一圈，俯仰限制防止翻转', () => {
+    let view = { yaw: 0, pitch: 0 };
+    for (let i = 0; i < 100; i++) view = turnView(view.yaw, view.pitch, 100, -100);
+    expect(view.yaw).toBeLessThan(-Math.PI * 2);
+    expect(view.pitch).toBe(CONFIG.camera.pitchLimit);
+    expect(turnView(0, 0, 0, 1e6).pitch).toBe(-CONFIG.camera.pitchLimit);
   });
-  it('极限输入持续一万帧仍不能转身', () => {
-    let view = new Vector2();
-    for (let i = 0; i < 10000; i++) view = dampView(view, new Vector2(100, -100), 1 / 60);
-    expect(Math.abs(view.x)).toBeLessThanOrEqual(CONFIG.camera.yawLimit);
-    expect(Math.abs(view.y)).toBeLessThanOrEqual(CONFIG.camera.pitchLimit);
-    expect(view.x).toBeCloseTo(-CONFIG.camera.yawLimit, 8);
-  });
-  it('镜头使用原最快跟随速度，仍平滑过渡而非瞬间转向', () => {
-    const step = dampView(new Vector2(), new Vector2(1, 1), 1 / 60);
-    expect(step.x).toBeLessThan(0);
-    expect(step.y).toBeGreaterThan(0);
-    expect(Math.abs(step.x)).toBeGreaterThan(CONFIG.camera.yawLimit * 0.07);
-    expect(Math.abs(step.x)).toBeLessThan(CONFIG.camera.yawLimit * 0.09);
-    const near = dampView(new Vector2(), new Vector2(1, 1), 0.46);
-    expect(Math.abs(near.x) / CONFIG.camera.yawLimit).toBeCloseTo(0.9, 2);
-  });
-  it('30 FPS 与 144 FPS 的一秒结果相同', () => {
-    const advance = (fps: number) => {
-      let view = new Vector2();
-      for (let i = 0; i < fps; i++) view = dampView(view, new Vector2(0.8, -0.6), 1 / fps);
-      return view;
-    };
-    expect(advance(30).distanceTo(advance(144))).toBeLessThan(1e-10);
+  it('鼠标移动总量一致时转向不依赖事件频率', () => {
+    let view = { yaw: 0, pitch: 0 };
+    for (let i = 0; i < 10; i++) view = turnView(view.yaw, view.pitch, 10, 2);
+    expect(view.yaw).toBeCloseTo(turnView(0, 0, 100, 20).yaw, 10);
+    expect(view.pitch).toBeCloseTo(turnView(0, 0, 100, 20).pitch, 10);
   });
   it('从左右上下角瞄准时，枪管和枪口射线穿过同一个目标', () => {
     const origin = new Vector3(0.46, -0.43, -0.62);

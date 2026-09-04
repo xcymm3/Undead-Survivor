@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Navigation, NAV_RADIUS } from '../../src/game/navigation';
 import { CrowdMovement } from '../../src/game/movement';
-import { Encounter, type Zombie } from '../../src/game/encounter';
-import { ZombieField } from '../../src/game/zombies';
+import { type Zombie } from '../../src/game/encounter';
 import { BreachSequence } from '../../src/game/breach';
-import { Matrix4, PerspectiveCamera, Raycaster, Scene, Vector3 } from 'three';
+import { PerspectiveCamera, Scene } from 'three';
 import { createWorld } from '../../src/game/world';
-import { SpawnDirector } from '../../src/game/spawn';
-import { seededRandom } from '../../src/game/geometry';
+import { SPAWN_ZONES } from '../../src/game/spawn';
+import { SURVIVAL } from '../../src/game/config';
 
 const obstacles = [
   { id: 'barrier', minX: -2, maxX: 2, minZ: -16, maxZ: -12 },
@@ -36,7 +35,7 @@ describe('静态障碍寻路与连续碰撞', () => {
       let failed = false, deviated = false;
       for (let i = 0; i < 2500 && !failed; i++) {
         const before = crowd.map(z => ({ ...z }));
-        const result = movement.advance(crowd, 0.05, 2); failed = result.failed;
+        movement.advance(crowd, 0.05, 2); failed = crowd.some(z => Math.hypot(z.x, z.z - 9) <= SURVIVAL.contactRadius + 1e-6);
         for (let j = 0; j < crowd.length; j++) {
           const z = crowd[j];
           expect(navigation.clear(before[j], z)).toBe(true);
@@ -45,7 +44,7 @@ describe('静态障碍寻路与连续碰撞', () => {
         }
       }
       expect(failed).toBe(true); expect(deviated).toBe(true);
-      expect(Math.min(...crowd.map(z => Math.hypot(z.x, z.z - 9)))).toBeCloseTo(8, 7);
+      expect(Math.min(...crowd.map(z => Math.hypot(z.x, z.z - 9)))).toBeCloseTo(SURVIVAL.contactRadius, 7);
     }
   });
   it('无障碍时仍走玩家方向的直线，高速绕障不跨越实体', () => {
@@ -56,44 +55,20 @@ describe('静态障碍寻路与连续碰撞', () => {
   });
 });
 
-it('实际场景障碍占地与八区域出生共用导航，所有入口均可无碰撞抵达', () => {
+it('实际场景六个入口可通行，并能绕障追到移动后的玩家', () => {
   vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, strokeRect() {}, fillText() {} }) }) });
   try {
-    const scene = new Scene(), world = createWorld(scene), nav = new Navigation(world.obstacles);
-    scene.updateMatrixWorld(true);
-    expect(world.obstacles.length).toBeGreaterThan(180);
-    for (const id of ['station', 'pickup', 'fence', 'barrier-near', 'gate-west', 'tree-0', 'rock-0']) expect(world.obstacles.some(o => o.id === id)).toBe(true);
-    const camera = new PerspectiveCamera(61, 1.6, 0.025, 220); camera.position.set(0, 4.8, 9); camera.rotation.x = -0.105; camera.updateMatrixWorld();
-    const director = new SpawnDirector(seededRandom(42));
-    const actor = new ZombieField(), encounter = new Encounter(); encounter.mode = 'survival';
-    const verifyCinematic = (z: Zombie, label: string) => {
-      const shotCamera = camera.clone(), sequence = new BreachSequence();
-      sequence.begin(shotCamera, z, world.surfaces); sequence.update(shotCamera, 2);
-      encounter.zombies = [z]; encounter.failed = true; encounter.breachedId = z.id;
-      for (const progress of [0.4, 0.6, 0.8, 1]) {
-        actor.sync(encounter, progress);
-        for (const part of [0, 3]) {
-          const matrix = new Matrix4(); actor.getMatrixAt(part, matrix);
-          const direction = new Vector3().setFromMatrixPosition(matrix).sub(shotCamera.position);
-          const ray = new Raycaster(shotCamera.position, direction.clone().normalize(), 0.025, direction.length());
-          expect(ray.intersectObjects(world.surfaces, false), `${label} 的扑击头部/身体不能被哨塔挡住`).toHaveLength(0);
+    const world = createWorld(new Scene()), nav = new Navigation(world.obstacles);
+    for (const goal of [{ x: 0, z: 9 }, { x: -19, z: -15 }, { x: 18, z: -40 }]) {
+      for (const zone of SPAWN_ZONES) {
+        const z = zombie(0, zone.center.x, zone.center.z), movement = new CrowdMovement(nav);
+        expect(nav.clear(z, z), zone.id).toBe(true);
+        for (let j = 0; j < 2000 && Math.hypot(z.x - goal.x, z.z - goal.z) > SURVIVAL.contactRadius + 1e-6; j++) {
+          const before = { ...z }; movement.advance([z], 0.05, 4, goal);
+          expect(nav.clear(before, z)).toBe(true);
         }
+        expect(Math.hypot(z.x - goal.x, z.z - goal.z), zone.id).toBeCloseTo(SURVIVAL.contactRadius, 5);
       }
-    };
-    for (let i = 0; i < 16; i++) {
-      const spawn = nav.spawn(director.next(camera)); expect(spawn).not.toBeNull();
-      const z = zombie(i, spawn!.x, spawn!.z), movement = new CrowdMovement(nav);
-      let failed = false;
-      for (let j = 0; j < 1600 && !failed; j++) {
-        const before = { ...z }; failed = movement.advance([z], 0.05, 4).failed;
-        expect(nav.clear(before, z)).toBe(true);
-      }
-      expect(failed, `入口 ${spawn!.spawnZone} 应能到达`).toBe(true);
-      verifyCinematic(z, `入口 ${spawn!.spawnZone}`);
-    }
-    for (let angle = -75; angle <= 75; angle += 5) {
-      const radians = angle * Math.PI / 180;
-      verifyCinematic(zombie(100 + angle, Math.sin(radians) * 8, 9 - Math.cos(radians) * 8), `方向 ${angle}°`);
     }
   } finally { vi.unstubAllGlobals(); }
 }, 20000);

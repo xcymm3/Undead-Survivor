@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { ARMOR_SPAWNS, CONFIG, CROWD, PRESSURE, ZOMBIE_TYPES } from '../src/game/config';
 import type { Difficulty, ZombieKind } from '../src/game/config';
-import { distanceToBreach, Encounter } from '../src/game/encounter';
+import { distanceToContact, Encounter } from '../src/game/encounter';
 import { Firearm } from '../src/game/firearm';
 import { seededRandom } from '../src/game/geometry';
 import { SpawnDirector } from '../src/game/spawn';
@@ -38,7 +38,7 @@ export function simulateRun(difficulty: Difficulty, profile: typeof PLAYER_PROFI
   const originalKinds = new Map<number, ZombieKind>();
   while (!encounter.failed && encounter.elapsed < 360) {
     firearm.update(dt);
-    encounter.update(dt, () => spawns.next(camera));
+    encounter.update(dt, () => spawns.next(encounter.player, 0));
     const time = encounter.elapsed;
     if (encounter.totalSpawned > observedSpawns) {
       for (const z of encounter.zombies) if (z.id >= observedSpawns) {
@@ -62,7 +62,7 @@ export function simulateRun(difficulty: Difficulty, profile: typeof PLAYER_PROFI
         if (z.health <= 0) continue;
         project.set(z.x, 1.83, z.z).project(camera);
         if (Math.abs(project.x) > 0.94 || Math.abs(project.y) > 0.9) continue;
-        const remaining = distanceToBreach(z);
+        const remaining = distanceToContact(z);
         if (remaining < closest) { closest = remaining; target = z; }
       }
       if (target) { targetId = target.id; readyAt = time + profile.acquireDelay; }

@@ -329,3 +329,22 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 .breach-culprit strong { display: block; margin: 9px 0; color: #fff1d8; font-size: 24px; letter-spacing: 3px; }
 .breach-culprit small { color: #dacbb5; font-size: 11px; }
 @keyframes breach-impact { from { box-shadow: inset 0 0 180px #9c3221; } to { box-shadow: inset 0 0 0 transparent; } }
+/* 地面生存模式沿用哨站配色和枪械 HUD。 */
+.mode-menu h1 { font-size: clamp(64px, 7.6vw, 110px); }
+.intro-controls { flex-wrap: wrap; max-width: 440px; row-gap: 12px; }
+.health-panel { position: absolute; left: 36px; bottom: 108px; width: 220px; padding: 16px 18px; background: #17271de6; border-left: 3px solid var(--color-accent); }
+.health-panel > div { display: flex; align-items: baseline; gap: 10px; margin: 5px 0 9px; }
+.health-panel strong { font: 600 42px var(--font-display); }
+.health-panel div span, .health-panel small { color: var(--color-muted); font-size: 10px; }
+.health-panel small { display: block; margin-top: 9px; }
+.health-panel progress { display: block; width: 100%; height: 5px; border: 0; background: #65715466; accent-color: #bfcc8d; }
+.health-panel progress::-webkit-progress-bar { background: #65715466; }
+.health-panel progress::-webkit-progress-value { background: #bfcc8d; }
+.health-panel.critical { border-color: var(--color-danger); color: var(--color-danger); }
+.health-panel.critical progress::-webkit-progress-value { background: var(--color-danger); }
+.damage-vignette { position: absolute; inset: 0; z-index: 4; pointer-events: none; box-shadow: inset 0 0 150px 45px #9c241a; opacity: 0; transition: opacity 0.12s; }
+.damage-vignette.active { opacity: 0.7; }
+.pointer-hint { position: absolute; top: 58%; left: 50%; transform: translateX(-50%); background: #17271df0; padding: 14px 20px; font-size: 13px; white-space: nowrap; }
+@media (max-width: 900px) { .mode-menu h1 { font-size: clamp(52px, 10vw, 80px); } .health-panel { left: 18px; bottom: 104px; width: 155px; padding: 12px; } .health-panel strong { font-size: 32px; } .health-panel small { font-size: 8px; } .pointer-hint { width: 80%; white-space: normal; text-align: center; } }
+
+@media (max-width: 900px) { .mode-menu h1 { display: flex; flex-direction: column; gap: 0; } .mode-menu h1 br, .mode-menu h1 b { display: none; } }

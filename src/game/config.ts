@@ -1,5 +1,5 @@
 export const CONFIG = {
-  camera: { fov: 61, height: 4.8, yawLimit: 4 * Math.PI / 180, pitchLimit: 2.5 * Math.PI / 180, damping: 5 },
+  camera: { fov: 61, height: 1.7, sensitivity: 0.0022, pitchLimit: 85 * Math.PI / 180 },
   weapon: { capacity: 30, interval: 0.15, reloadDuration: 0.775, range: 180 },
   target: { respawn: 3, bodyDamage: 50, headDamage: 100 },
 } as const;
@@ -21,7 +21,10 @@ export const DIFFICULTIES = {
   normal: { label: '普通', description: '开局即按比例混入路障僵尸，爆头需 2 枪' },
   hard: { label: '困难', description: '开局即按比例加入路障与铁桶，铁桶爆头需 4 枪' },
 } as const;
-export const SURVIVAL = { maxSpawnRate: 10, maxZombies: 256, breachRadius: 8, playerX: 0, playerZ: 9 } as const;
+export const ARENA = { minX: -22, maxX: 22, minZ: -48, maxZ: 14 } as const;
+export const PLAYER = { health: 100, speed: 4.2, radius: 0.95 } as const;
+export const ATTACK = { damage: 10, windup: 0.35, duration: 1.1 } as const;
+export const SURVIVAL = { maxSpawnRate: 10, maxZombies: 256, contactRadius: 1.25, spawnSafeRadius: 8, playerX: 0, playerZ: 9 } as const;
 export const CROWD = { separationRadius: 1.35, maxLateralSpeed: 0.32, lateralFraction: 0.2, steeringDamping: 5, arrivalFade: 2 } as const;
 export interface RunResult {
   id: string;
@@ -33,6 +36,7 @@ export interface RunResult {
   endedAt: string;
 }
 export interface GameSnapshot {
+  health: number; hurt: boolean; pointerLocked: boolean;
   weaponsReady: boolean; weaponIndex: number; requestedWeapon: number; switching: boolean; reloadQueued: boolean; inventory: number[];
   phase: GamePhase;
   mode: GameMode;

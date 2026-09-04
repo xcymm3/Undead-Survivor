@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Zombie } from './encounter';
 
 export const BREACH_DURATION = 2;
-/** 仅失败镜头使用自动取景；战斗镜头的固定朝向与有限视角不变。 */
+/** 生命归零后的失败镜头自动聚焦最后的攻击者，战斗期间使用玩家自由视角。 */
 export class BreachSequence {
   readonly light = new THREE.PointLight(0xffcf95, 0, 12, 2);
   elapsed = 0;

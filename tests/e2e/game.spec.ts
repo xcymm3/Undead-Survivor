@@ -1,106 +1,49 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { capture, fire, lookAt, snapshot, start } from './controls';
 
-const snapshot = (page: Page) => page.evaluate(() => window.__undeadTower!.snapshot());
-async function start(page: Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: '进入哨站' }).click();
-  await expect.poll(async () => (await snapshot(page)).phase).toBe('playing');
-}
-
-test('首屏加载、真实开火、枪口火光和装填', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+test('自由转向、WASD移动并开火，枪口与准星一致，暂停清空按键', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await start(page);
-  await page.mouse.move(900, 380);
-  await page.mouse.down();
-  await expect.poll(async () => (await snapshot(page)).shots).toBeGreaterThan(0);
-  // 按住期间采样多帧，避免 65 ms 枪口火光被跨进程调度错过。
-  const visibleFlash = await page.evaluate(async () => {
-    for (let i = 0; i < 40; i++) {
-      if (window.__undeadTower!.snapshot().flashVisible) return true;
-      await new Promise(requestAnimationFrame);
-    }
-    return false;
-  });
-  expect(visibleFlash).toBe(true);
-  await page.mouse.up();
-  const shot = await snapshot(page);
-  expect(shot.ammo).toBe(30 - shot.shots);
-  expect(shot.effects).toBeGreaterThan(0);
-  const ray = shot.lastShot!;
-  const delta = ray.aimPoint.map((v, i) => v - ray.muzzle[i]);
-  const length = Math.hypot(...delta);
-  expect(delta.reduce((sum, v, i) => sum + v / length * ray.direction[i], 0)).toBeCloseTo(1, 8);
-  await page.keyboard.press('r');
-  await expect.poll(async () => (await snapshot(page)).reloading).toBe(true);
-  await expect(page.getByTestId('ammo')).toHaveText('30', { timeout: 4000 });
-  expect(errors).toEqual([]);
-});
-
-test('视角小幅阻尼跟随、不会累积转身，枪管与瞄准点一致', async ({ page }) => {
-  await start(page);
-  await page.mouse.move(1250, 140);
-  await expect.poll(async () => Math.abs((await snapshot(page)).yaw)).toBeGreaterThan(0.025);
-  for (const [x, y] of [[1350, 250], [80, 650], [1320, 700], [240, 80], [720, 450]]) {
-    await page.mouse.move(x, y);
-    await page.waitForTimeout(140);
-    const s = await snapshot(page);
-    expect(Math.abs(s.yaw)).toBeLessThanOrEqual(4 * Math.PI / 180 + 1e-8);
-    expect(Math.abs(s.pitch)).toBeLessThanOrEqual(2.5 * Math.PI / 180 + 1e-8);
-    const direction = s.aimPoint.map((v, i) => v - s.muzzle[i]);
-    const length = Math.hypot(...direction);
+  await expect(page.getByTestId('player-health')).toHaveText('100');
+  const initial = await snapshot(page);
+  await page.keyboard.down('w'); await page.waitForTimeout(500);
+  await fire(page); await page.keyboard.up('w');
+  const moved = await snapshot(page);
+  expect(moved.player.z).toBeLessThan(initial.player.z - 1);
+  expect(moved.shots).toBeGreaterThan(0); expect(moved.ammo).toBeLessThan(30);
+  await lookAt(page, 20, 1.7, moved.player.z);
+  expect((await snapshot(page)).yaw).toBeCloseTo(-Math.PI / 2, 2);
+  await page.keyboard.down('w'); await page.waitForTimeout(400); await page.keyboard.up('w');
+  expect((await snapshot(page)).player.x).toBeGreaterThan(0.8);
+  for (const point of [[-20, 5, 9], [0, 1.7, 20], [20, 1.7, -30]]) {
+    await lookAt(page, point[0], point[1], point[2]);
+    const s = await snapshot(page), direction = s.aimPoint.map((v, i) => v - s.muzzle[i]), length = Math.hypot(...direction);
     expect(direction.reduce((sum, v, i) => sum + v / length * s.barrelDirection[i], 0)).toBeCloseTo(1, 7);
+    expect(s.aim).toEqual([0, 0]);
   }
-});
-
-test('瞄准人形靶头部可命中，倒下后自动复位', async ({ page }) => {
-  await start(page);
-  // 镜头在缓慢跟随，迭代屏幕投影直至鼠标与当前头部位置收敛。
-  for (let i = 0; i < 8; i++) {
-    const target = (await snapshot(page)).targets[1];
-    await page.mouse.move(target.head.x, target.head.y);
-    await page.waitForTimeout(120);
-  }
-  const head = (await snapshot(page)).targets[1].head;
-  await page.mouse.click(head.x, head.y);
-  await expect.poll(async () => (await snapshot(page)).hits).toBe(1);
-  await expect.poll(async () => (await snapshot(page)).kills).toBe(1);
-  expect((await snapshot(page)).targets[1].health).toBe(0);
-  const killed = await snapshot(page);
-  expect(killed.blood.active).toBeGreaterThan(0);
-  expect(killed.audio.deathCues).toBe(1);
-  expect(killed.blood.origin).toEqual(killed.lastShot!.impact);
-  await page.waitForTimeout(150);
-  await page.screenshot({ path: 'test-results/blood-kill.png' });
-  await expect.poll(async () => (await snapshot(page)).blood.active, { timeout: 3000 }).toBe(0);
-  await expect.poll(async () => (await snapshot(page)).targets[1].health, { timeout: 5000 }).toBe(100);
-});
-
-test('暂停、设置和失焦不会误射，重新开始清空训练状态', async ({ page }) => {
-  await start(page);
-  await page.mouse.click(800, 410);
-  await page.keyboard.press('Escape');
-  expect((await snapshot(page)).phase).toBe('paused');
-  const count = (await snapshot(page)).shots;
-  await page.mouse.click(100, 500);
-  expect((await snapshot(page)).shots).toBe(count);
-  await page.getByRole('button', { name: '游戏设置' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.locator('#damping')).toHaveCount(0);
-  await expect(page.getByRole('slider', { name: '总音量' })).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).not.toBeVisible();
-  expect((await snapshot(page)).phase).toBe('paused');
-  await page.getByRole('button', { name: '重新开始训练' }).click();
-  expect((await snapshot(page)).shots).toBe(0);
-  await page.mouse.down();
+  await page.keyboard.down('w'); await page.keyboard.press('Escape');
+  await expect.poll(async () => (await snapshot(page)).phase).toBe('paused');
+  await page.keyboard.up('w');
+  const paused = await snapshot(page); await page.waitForTimeout(250);
+  expect((await snapshot(page)).player).toEqual(paused.player);
+  await page.getByRole('button', { name: '继续游戏' }).click(); await capture(page);
+  const resumed = await snapshot(page); await page.waitForTimeout(200);
+  expect((await snapshot(page)).player).toEqual(resumed.player);
+  await page.keyboard.press('r');
+  await expect(page.getByTestId('ammo')).toHaveText('30');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  const blurred = await snapshot(page);
-  expect(blurred.phase).toBe('paused');
-  await page.waitForTimeout(350);
-  expect((await snapshot(page)).shots).toBe(blurred.shots);
-  await page.mouse.up();
+  expect((await snapshot(page)).phase).toBe('paused'); expect(errors).toEqual([]);
+});
+
+test('自由视角对准练习靶爆头，击倒复位与受伤隔离', async ({ page }) => {
+  await start(page);
+  const target = (await snapshot(page)).targets[1];
+  await lookAt(page, target.x, 1.83, target.z); await fire(page);
+  await expect.poll(async () => (await snapshot(page)).kills).toBe(1);
+  expect((await snapshot(page)).blood.bursts).toBe(1);
+  expect((await snapshot(page)).audio.deathCues).toBe(1);
+  await expect.poll(async () => (await snapshot(page)).targets[1].health, { timeout: 5000 }).toBe(100);
+  expect((await snapshot(page)).health).toBe(100);
 });
 
 for (const width of [320, 375, 414, 768]) {

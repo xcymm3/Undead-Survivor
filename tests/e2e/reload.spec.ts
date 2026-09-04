@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { capture } from './controls';
 import { WEAPONS } from '../../src/game/weapons';
 const snapshot = (page: Page) => page.evaluate(() => window.__undeadTower!.snapshot());
 async function freezeAt(page: Page, progress: number) {
@@ -38,7 +39,7 @@ test('六种悬浮枪械数字键切换、独立弹量、换弹动画与暂停�
     expect(during.weaponAnimation.bones).not.toEqual(idle.weaponAnimation.bones);
     await page.screenshot({ path: `test-results/weapon-${WEAPONS[i].id}-reload.png` });
     await page.waitForTimeout(150); expect((await snapshot(page)).weaponAnimation).toEqual(during.weaponAnimation);
-    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape'); await capture(page);
     await expect.poll(async () => (await snapshot(page)).reloading).toBe(false);
     expect((await snapshot(page)).ammo).toBe(WEAPONS[i].capacity);
     expect((await snapshot(page)).weaponAnimation.kind).toBe('idle');
@@ -70,7 +71,7 @@ test('半自动不连发，换弹排队切枪、快速改选与切枪暂停不�
   await freezeAt(page, 0.4);
   const queued = await snapshot(page);
   expect(queued.weaponIndex).toBe(2); expect(queued.requestedWeapon).toBe(5); expect(queued.switching).toBe(false);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); await capture(page);
   await expect.poll(async () => { const s = await snapshot(page); return s.weaponIndex === 5 && !s.switching; }).toBe(true);
   expect((await snapshot(page)).inventory[2]).toBe(12);
   await page.mouse.wheel(0, -300);
@@ -80,6 +81,6 @@ test('半自动不连发，换弹排队切枪、快速改选与切枪暂停不�
   });
   const paused = await snapshot(page); await page.waitForTimeout(200);
   expect((await snapshot(page)).switchProgress).toBe(paused.switchProgress);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); await capture(page);
   await expect.poll(async () => { const s = await snapshot(page); return s.weaponIndex === 4 && !s.switching; }).toBe(true);
 });

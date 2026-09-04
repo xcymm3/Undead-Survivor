@@ -1,64 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { Matrix4, PerspectiveCamera, Vector3 } from 'three';
-import { CROWD } from '../../src/game/config';
-import { Encounter, distanceToBreach } from '../../src/game/encounter';
-import type { Position, Zombie } from '../../src/game/encounter';
-import { seededRandom } from '../../src/game/geometry';
+import { Matrix4, Raycaster, Vector3 } from 'three';
+import { CROWD, SURVIVAL } from '../../src/game/config';
+import { Encounter } from '../../src/game/encounter';
+import type { Zombie } from '../../src/game/encounter';
 import { CrowdMovement } from '../../src/game/movement';
-import { SpawnDirector } from '../../src/game/spawn';
 import { ZombieField } from '../../src/game/zombies';
-
 const zombie = (id: number, x: number, z: number): Zombie => ({ id, x, z, kind: 'normal', health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0 });
-const radius = (p: Position) => Math.hypot(p.x, p.z - 9);
-
-describe('直线追击与拥挤避让', () => {
-  it('记录首个实际越线者，同步越线时稳定选择最小 ID，重开清空', () => {
-    for (const reversed of [false, true]) {
-      const crowd = [zombie(9, 0, 0), zombie(2, 0, 0), zombie(1, 0, -10)];
-      const result = new CrowdMovement().advance(reversed ? crowd.reverse() : crowd, 1, 2);
-      expect(result.failed).toBe(true);
-      expect(result.breachedId).toBe(2);
-    }
-    const encounter = new Encounter(); encounter.reset('survival', 'hard');
-    encounter.zombies = [zombie(42, 0, 0.99)];
-    encounter.update(1, () => ({ x: 0, z: -100 }));
-    expect(encounter.breachedId).toBe(42);
-    encounter.reset('survival', 'hard');
-    expect(encounter.breachedId).toBeNull();
+describe('移动目标追击与拥挤避让', () => {
+  it('高速接近在身体接触处停止，每只僵尸独立移动', () => {
+    const a = zombie(0, 0, 7), b = zombie(1, 10, -10);
+    new CrowdMovement().advance([a, b], 1, 8);
+    expect(Math.hypot(a.x, a.z - 9)).toBeCloseTo(SURVIVAL.contactRadius, 8);
+    expect(Math.hypot(b.x - 10, b.z + 10)).toBeCloseTo(8, 8);
   });
-  it('不同方向的孤立僵尸全程沿最短直线朝玩家前进，在最近防线交点停止', () => {
-    for (const start of [{ x: -12, z: -20 }, { x: 0, z: -40 }, { x: 15, z: -18 }]) {
-      const z = zombie(0, start.x, start.z), movement = new CrowdMovement();
-      const initialDistance = radius(start), ux = -start.x / initialDistance, uz = (9 - start.z) / initialDistance;
-      expect(distanceToBreach(z)).toBeCloseTo(initialDistance - 8, 10);
-      let duration = 0, failed = false;
-      for (let i = 0; i < 2000 && !failed; i++) {
-        const result = movement.advance([z], 1 / 60, 1.5);
-        duration += result.duration; failed = result.failed;
-        expect((z.x - start.x) * uz - (z.z - start.z) * ux).toBeCloseTo(0, 9);
-        expect(z.heading).toBeCloseTo(Math.atan2(ux, uz), 9);
-        expect(z.avoidance).toBe(0);
-      }
-      expect(failed).toBe(true);
-      expect(duration).toBeCloseTo((initialDistance - 8) / 1.5, 8);
-      expect(z.x).toBeCloseTo(start.x * 8 / initialDistance, 8);
-      expect(z.z).toBeCloseTo(9 + (start.z - 9) * 8 / initialDistance, 8);
-    }
+  it('玩家换位后追击方向立即改变，接触不冻结整个尸群', () => {
+    const z = zombie(0, 0, -5), movement = new CrowdMovement();
+    movement.advance([z], 1, 1.4, { x: 0, z: 9 });
+    expect(z.z).toBeCloseTo(-3.6);
+    const before = { ...z };
+    movement.advance([z], 1, 1.4, { x: 10, z: -10 });
+    expect(z.x).toBeGreaterThan(before.x); expect(z.z).toBeLessThan(before.z);
   });
-
-  it('出生区域保留随机位置，不再携带随机突破点或中途路径点', () => {
-    const camera = new PerspectiveCamera(61, 1.6, 0.025, 220);
-    camera.position.set(0, 4.8, 9); camera.rotation.x = -0.105; camera.updateMatrixWorld();
-    const director = new SpawnDirector(seededRandom(42));
-    const spawns = Array.from({ length: 64 }, () => director.next(camera));
-    expect(new Set(spawns.map(p => p.spawnZone)).size).toBe(8);
-    expect(new Set(spawns.filter(p => p.spawnZone === 'north-road').map(p => p.x)).size).toBe(8);
-    for (const spawn of spawns) {
-      expect(spawn).not.toHaveProperty('waypoint');
-      expect(spawn).not.toHaveProperty('breachTarget');
-    }
+  it('扑击伸出的手臂仍参与枪口射线命中', () => {
+    const encounter = new Encounter(); encounter.reset('survival', 'easy');
+    encounter.zombies = [{ ...zombie(0, 0, 0), attacking: true, attackTime: 0.35 }];
+    const field = new ZombieField(); field.sync(encounter);
+    const ray = new Raycaster(new Vector3(-5, 1.1, 1.2), new Vector3(1, 0, 0));
+    expect(field.decode(ray.intersectObject(field)[0])).toEqual({ id: 0, head: false });
+    field.dispose();
   });
-
   it('密集队列缓慢分开，每步总速度及横向速度受限，始终向目标推进', () => {
     const crowd = [zombie(0, 0, -6), zombie(1, 0, -6)];
     const movement = new CrowdMovement();
@@ -118,25 +88,4 @@ describe('直线追击与拥挤避让', () => {
     field.dispose();
   });
 
-  it('高速时在第一次越线处冻结全队，朝向与实际位移一致', () => {
-    const a = zombie(0, 0, -5), b = zombie(1, 5, -20);
-    const result = new CrowdMovement().advance([a, b], 1, 100);
-    expect(result.failed).toBe(true);
-    expect(result.duration).toBeCloseTo(0.06, 8);
-    expect(radius(a)).toBeCloseTo(8, 8);
-    expect(Math.hypot(b.x - 5, b.z + 20)).toBeCloseTo(6, 8);
-    expect(b.heading).toBeCloseTo(Math.atan2(b.x - 5, b.z + 20), 10);
-  });
-
-  it('常见帧率下密集僵尸均可到达防线，不在终点附近绕圈或僵持', () => {
-    const results = [20, 60, 144].map(fps => {
-      const encounter = new Encounter(); encounter.reset('survival', 'easy');
-      encounter.zombies = [zombie(99, 0, -5), zombie(100, 0, -5)];
-      for (let i = 0; i < 15 * fps && !encounter.failed; i++) encounter.update(1 / fps, () => ({ x: 1000, z: -1000 }));
-      expect(encounter.failed).toBe(true);
-      expect(encounter.nearest).toBeCloseTo(8, 8);
-      return encounter.elapsed;
-    });
-    expect(Math.max(...results) - Math.min(...results)).toBeLessThan(0.025);
-  });
 });

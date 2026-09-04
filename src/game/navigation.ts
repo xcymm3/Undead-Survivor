@@ -1,14 +1,16 @@
-import { SURVIVAL } from './config';
+import { ARENA, SURVIVAL } from './config';
 import type { Position, SpawnPosition } from './encounter';
 
 export interface Obstacle { id: string; minX: number; maxX: number; minZ: number; maxZ: number; }
 // 包含伸出的手臂；只把实体的地面占地计入导航，树冠、草和高架横杆不封路。
 export const NAV_RADIUS = 0.95;
-const CELL = 0.65, MIN_X = -96, MIN_Z = -158, WIDTH = 297, HEIGHT = 261, HASH = 4;
-const goal = { x: SURVIVAL.playerX, z: SURVIVAL.playerZ };
+const CELL = 0.65, MIN_X = ARENA.minX, MIN_Z = ARENA.minZ,
+  WIDTH = Math.ceil((ARENA.maxX - MIN_X) / CELL) + 1, HEIGHT = Math.ceil((ARENA.maxZ - MIN_Z) / CELL) + 1, HASH = 4;
 
-/** 静态障碍只建一次反向最短路场，全体僵尸共享；运行时做视线捷径与连续碰撞。 */
+/** 静态占地缓存，玩家跨网格时重建共享流场；直线路径始终追踪玩家实时位置。 */
 export class Navigation {
+  private goal: Position = { x: SURVIVAL.playerX, z: SURVIVAL.playerZ };
+  private goalIndex = -1;
   private buckets = new Map<string, Obstacle[]>();
   private blocked = new Uint8Array(WIDTH * HEIGHT);
   private distance = new Float64Array(WIDTH * HEIGHT).fill(Infinity);
@@ -21,7 +23,8 @@ export class Navigation {
         if (bucket) bucket.push(o); else this.buckets.set(key, [o]);
       }
     }
-    this.build();
+    for (let i = 0; i < this.blocked.length; i++) this.blocked[i] = this.clear(this.point(i), this.point(i)) ? 0 : 1;
+    this.setGoal(this.goal);
   }
   private point(index: number): Position { return { x: MIN_X + index % WIDTH * CELL, z: MIN_Z + Math.floor(index / WIDTH) * CELL }; }
   private index(p: Position) {
@@ -29,6 +32,7 @@ export class Navigation {
     return x < 0 || z < 0 || x >= WIDTH || z >= HEIGHT ? -1 : z * WIDTH + x;
   }
   clear(a: Position, b: Position) {
+    if ([a, b].some(p => p.x < ARENA.minX + NAV_RADIUS || p.x > ARENA.maxX - NAV_RADIUS || p.z < ARENA.minZ + NAV_RADIUS || p.z > ARENA.maxZ - NAV_RADIUS)) return false;
     const dx = b.x - a.x, dz = b.z - a.z;
     for (let x = Math.floor(Math.min(a.x, b.x) / HASH); x <= Math.floor(Math.max(a.x, b.x) / HASH); x++) {
       for (let z = Math.floor(Math.min(a.z, b.z) / HASH); z <= Math.floor(Math.max(a.z, b.z) / HASH); z++) {
@@ -44,14 +48,29 @@ export class Navigation {
     }
     return true;
   }
-  private build() {
-    for (let i = 0; i < this.blocked.length; i++) this.blocked[i] = this.clear(this.point(i), this.point(i)) ? 0 : 1;
+  setGoal(position: Position) {
+    this.goal = { ...position };
+    let root = this.index(position);
+    // 玩家可处于两个网格点之间，选择与玩家连通的最近可通行格。
+    if (root < 0) return;
+    let best = Infinity, selected = -1;
+    const cx = root % WIDTH, cz = Math.floor(root / WIDTH);
+    for (let z = Math.max(0, cz - 2); z <= Math.min(HEIGHT - 1, cz + 2); z++) for (let x = Math.max(0, cx - 2); x <= Math.min(WIDTH - 1, cx + 2); x++) {
+      const index = z * WIDTH + x, point = this.point(index), distance = Math.hypot(point.x - position.x, point.z - position.z);
+      if (!this.blocked[index] && distance < best && this.clear(position, point)) { best = distance; selected = index; }
+    }
+    root = selected;
+    if (root === this.goalIndex) return;
+    this.goalIndex = root;
+    this.build(root);
+  }
+  private build(root: number) {
+    this.distance.fill(Infinity); this.next.fill(-1);
     const heap: { index: number; cost: number }[] = [];
     const push = (entry: typeof heap[number]) => {
       heap.push(entry); let i = heap.length - 1;
       while (i > 0) { const parent = (i - 1) >> 1; if (heap[parent].cost <= entry.cost) break; heap[i] = heap[parent]; i = parent; } heap[i] = entry;
     };
-    const root = this.index(goal);
     if (root < 0 || this.blocked[root]) return;
     this.distance[root] = 0; push({ index: root, cost: 0 });
     while (heap.length) {
@@ -87,11 +106,11 @@ export class Navigation {
   spawn(position: SpawnPosition): SpawnPosition | null {
     const index = this.nearest(position, false, 12); if (index < 0) return null;
     const point = this.clear(position, position) && this.clear(position, this.point(index)) ? position : this.point(index);
-    if (Math.hypot(point.x - goal.x, point.z - goal.z) < SURVIVAL.breachRadius + 4) return null;
+    if (Math.hypot(point.x - this.goal.x, point.z - this.goal.z) < SURVIVAL.spawnSafeRadius) return null;
     return { ...position, ...point };
   }
   waypoint(position: Position): Position | null {
-    if (this.clear(position, goal)) return goal;
+    if (this.clear(position, this.goal)) return this.goal;
     let index = this.nearest(position, true); if (index < 0) return null;
     let target = this.point(index);
     for (let i = 0; i < 18 && this.next[index] >= 0; i++) {

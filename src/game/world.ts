@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { batchStaticBoxes, box, cube, material, seededRandom } from './geometry';
+import { ARENA } from './config';
+import { SPAWN_ZONES } from './spawn';
 import type { Obstacle } from './navigation';
 
 function sign(parent: THREE.Object3D, text: string, subtitle: string, x: number, y: number, z: number, width = 5) {
@@ -103,7 +105,7 @@ export function createWorld(scene: THREE.Scene) {
   const transform = new THREE.Object3D();
   for (let i = 0; i < 150; i++) {
     const side = i % 2 ? -1 : 1;
-    const x = side * (17 + random() * 70);
+    const x = side * (27 + random() * 60);
     const z = -10 - random() * 135;
     const height = 7 + random() * 11;
     obstacles.push({ id: `tree-${i}`, minX: x - 0.25, maxX: x + 0.25, minZ: z - 0.25, maxZ: z + 0.25 });
@@ -129,7 +131,7 @@ export function createWorld(scene: THREE.Scene) {
   scene.add(grasses);
   for (let i = 0; i < 28; i++) {
     const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), material(0x8c9580));
-    rock.position.set((i % 2 ? -1 : 1) * (8 + random() * 35), 0.35, -5 - random() * 75);
+    rock.position.set((i % 2 ? -1 : 1) * (26 + random() * 20), 0.35, -5 - random() * 75);
     rock.scale.set(0.7 + random() * 1.2, 0.55 + random(), 0.7 + random()); rock.rotation.set(random(), random(), 0); rock.castShadow = true; scene.add(rock);
     solid(rock, `rock-${i}`);
   }
@@ -154,26 +156,25 @@ export function createWorld(scene: THREE.Scene) {
   solid(box(scene, [0.3, 5.8, 0.3], [7.5, 2.9, -42], 0x586c5e), 'gate-east');
   box(scene, [13.3, 0.18, 0.25], [1, 5.7, -42], 0x596c5e);
   sign(scene, 'RESTRICTED AREA', 'CHECKPOINT 04', 1, 5.0, -41.8, 6);
-  for (let i = 0; i < 10; i++) {
-    const z = -12 - i * 4.5;
-    box(scene, [0.10, 2.5, 0.10], [15, 1.25, z], 0x687d6d);
-    for (const y of [0.6, 1.2, 1.8, 2.4]) box(scene, [0.035, 0.035, 4.5], [15, y, z - 2.25], 0x829484);
-    const diagonal = box(scene, [0.028, 2.5, 0.028], [15, 1.2, z - 2.2], 0x829484); diagonal.rotation.x = 0.8;
+  // 地面生存区：边墙与碰撞边界一致；北、东各三个固定入口。
+  for (const x of [ARENA.minX - 0.25, ARENA.maxX + 0.25]) {
+    box(scene, [0.5, 2.8, ARENA.maxZ - ARENA.minZ + 1], [x, 1.4, (ARENA.minZ + ARENA.maxZ) / 2], 0x586c5e);
+    box(scene, [0.7, 0.18, ARENA.maxZ - ARENA.minZ + 1], [x, 2.85, (ARENA.minZ + ARENA.maxZ) / 2], 0xa0a68b);
   }
-  obstacles.push({ id: 'fence', minX: 14.95, maxX: 15.05, minZ: -57, maxZ: -11.95 });
-  // 前景哨塔提供明确的固定站位和空间层次。
-  box(scene, [11, 0.24, 7], [0, 2.45, 8], 0x6d6f54);
-  for (let i = 0; i < 12; i++) box(scene, [0.86, 0.06, 7], [-4.9 + i * 0.9, 2.60, 8], i % 2 ? 0x82836a : 0x787b60);
-  box(scene, [10.6, 0.22, 0.28], [0, 3.13, 5.3], 0x586453);
-  box(scene, [10.6, 0.12, 0.20], [0, 2.77, 5.3], 0x657159);
-  for (const x of [-5, 5]) {
-    box(scene, [0.30, 6.4, 0.30], [x, 4.7, 5.1], 0x58624e);
-    box(scene, [0.42, 0.15, 0.42], [x, 6.7, 5.1], 0x879077);
+  for (const z of [ARENA.minZ - 0.25, ARENA.maxZ + 0.25]) {
+    box(scene, [ARENA.maxX - ARENA.minX, 2.8, 0.5], [0, 1.4, z], 0x586c5e);
+    box(scene, [ARENA.maxX - ARENA.minX, 0.18, 0.7], [0, 2.85, z], 0xa0a68b);
   }
-  for (let i = 0; i < 4; i++) box(scene, [1.05, 0.3, 0.65], [-3.7 + i * 0.93, 2.87, 5.9], 0x8c8d68);
-  for (let i = 0; i < 3; i++) box(scene, [1.05, 0.30, 0.65], [-3.3 + i * 0.93, 3.17, 5.9], 0x969575);
-  box(scene, [1.5, 1, 1.2], [-4.1, 3.13, 7.4], 0x657455);
-  for (const x of [-4.7, -3.5]) box(scene, [0.12, 1.02, 1.24], [x, 3.14, 7.4], 0x929578);
+  for (const zone of SPAWN_ZONES) {
+    const gate = new THREE.Group(); scene.add(gate);
+    const east = zone.id.startsWith('east');
+    gate.position.set(east ? ARENA.maxX - 0.05 : zone.center.x, 0, east ? zone.center.z : ARENA.minZ + 0.05);
+    gate.rotation.y = east ? -Math.PI / 2 : 0;
+    box(gate, [3.5, 2.7, 0.08], [0, 1.35, 0], 0x303e38);
+    for (const x of [-1.8, 1.8]) box(gate, [0.18, 3.4, 0.18], [x, 1.7, 0], 0xb6a66d);
+    sign(gate, east ? 'EAST / INFECTED' : 'NORTH / INFECTED', zone.id.toUpperCase(), 0, 3.3, 0.12, 3.8);
+    box(scene, [2.5, 0.035, 2.5], [zone.center.x, 0.08, zone.center.z], 0xaaa077);
+  }
   // 僵尸在场景合批后单独加入，便于模式切换与高密度绘制。
   batchStaticBoxes(scene, new Set());
   const surfaces: THREE.Object3D[] = [];
