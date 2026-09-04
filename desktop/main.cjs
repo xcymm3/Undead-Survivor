@@ -3,6 +3,11 @@ const { mkdirSync, readFileSync } = require('node:fs');
 const path = require('node:path');
 
 const GAME_URL = 'undead://game/';
+const silent = app.commandLine.hasSwitch('silent') || process.env.UNDEAD_SURVIVOR_SILENT === '1';
+const reportStartupError = (title, message) => {
+  if (silent) console.error(`${title}\n${message}`);
+  else dialog.showErrorBox(title, message);
+};
 protocol.registerSchemesAsPrivileged([{ scheme: 'undead', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
 // NSIS 便携启动器会解压到临时目录；成绩必须保存在原 EXE 旁，不能跟随临时目录消失。
@@ -15,7 +20,7 @@ try {
   app.setPath('crashDumps', path.join(dataDir, 'CrashDumps'));
   app.setAppLogsPath(path.join(dataDir, 'Logs'));
 } catch (error) {
-  dialog.showErrorBox('Undead Survivor 无法保存数据', `请把游戏放在可以写入的文件夹后重试。\n\n${dataDir}\n${error.message}`);
+  reportStartupError('Undead Survivor 无法保存数据', `请把游戏放在可以写入的文件夹后重试。\n\n${dataDir}\n${error.message}`);
   app.exit(1);
 }
 
@@ -37,10 +42,13 @@ ipcMain.on('coop:send', (event, value) => {
   try { checkSender(event); if (JSON.stringify(value).length <= 128 * 1024) steam?.sendData(value); } catch { /* 丢弃非法或过大的消息。 */ }
 });
 app.on('before-quit', () => { steam?.dispose(); steam = null; });
-if (!app.requestSingleInstanceLock()) {
+if (!app.requestSingleInstanceLock({ silent })) {
   app.quit();
 } else {
-  app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
+  app.on('second-instance', (_event, argv, _cwd, data) => {
+    if (silent || data?.silent || argv.includes('--silent')) return;
+    if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
+  });
   app.whenReady().then(async () => {
     app.setAppUserModelId('com.undeadsurvivor.game');
     Menu.setApplicationMenu(null);
@@ -60,22 +68,24 @@ if (!app.requestSingleInstanceLock()) {
         return new Response(request.method === 'HEAD' ? null : body, { headers: { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream', 'Content-Security-Policy': csp, 'X-Content-Type-Options': 'nosniff' } });
       } catch { return new Response(null, { status: 404 }); }
     });
-    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback((permission === 'fullscreen' || permission === 'pointerLock')));
-    session.defaultSession.setPermissionCheckHandler((_contents, permission) => (permission === 'fullscreen' || permission === 'pointerLock'));
+    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(!silent && (permission === 'fullscreen' || permission === 'pointerLock')));
+    session.defaultSession.setPermissionCheckHandler((_contents, permission) => !silent && (permission === 'fullscreen' || permission === 'pointerLock'));
     window = new BrowserWindow({
       title: 'Undead Survivor', width: 1440, height: 900, minWidth: 960, minHeight: 640,
       backgroundColor: '#1d2624', show: false, autoHideMenuBar: true,
+      focusable: !silent, skipTaskbar: silent,
       icon: path.join(__dirname, 'icon.ico'),
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false },
     });
+    if (silent) window.webContents.setAudioMuted(true);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (!url.startsWith(GAME_URL)) event.preventDefault(); });
     window.webContents.on('before-input-event', (event, input) => {
-      if (input.type === 'keyDown' && input.key === 'F11') { event.preventDefault(); window.setFullScreen(!window.isFullScreen()); }
+      if (input.type === 'keyDown' && input.key === 'F11') { event.preventDefault(); if (!silent) window.setFullScreen(!window.isFullScreen()); }
     });
-    window.once('ready-to-show', () => window.show());
+    window.once('ready-to-show', () => { if (!silent) window.show(); });
     window.on('closed', () => { window = null; });
     await window.loadURL(GAME_URL);
-  }).catch(error => { dialog.showErrorBox('Undead Survivor 启动失败', error.message); app.quit(); });
+  }).catch(error => { reportStartupError('Undead Survivor 启动失败', error.message); app.quit(); });
   app.on('window-all-closed', () => app.quit());
 }

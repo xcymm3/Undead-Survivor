@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "install:runtime": "node node_modules/electron/install.js",
     "desktop": "npm run install:runtime && npm run build && electron .",
+    "desktop:silent": "npm run desktop -- --silent",
     "dist:portable": "npm run install:runtime && node scripts/collect-notices.mjs && npm run build && electron-builder --config electron-builder.cjs --win portable --x64 --publish never",
     "test:portable": "node scripts/smoke-portable.mjs",
     "test:desktop": "npm run build && node scripts/smoke-desktop.mjs",
