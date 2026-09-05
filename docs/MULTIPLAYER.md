@@ -1,13 +1,13 @@
-# Undead Survivor 0.7.0 EXE 联机说明
+# Undead Survivor 0.7.1 EXE 联机说明
 
-这份说明适用于 GitHub Release 中的 `Undead-Survivor-0.7.0.exe`（Windows 10/11，64 位）。该版本使用 Steam Spacewar（App ID 480）测试 2～4 人 P2P 协作。
+这份说明适用于 GitHub Release 中的 `Undead-Survivor-0.7.1.exe`（Windows 10/11，64 位）。该版本使用 Steam Spacewar（App ID 480）测试 2～4 人 P2P 协作。
 
 ## 发给朋友哪些文件
 
 从 GitHub Release 下载并发送以下两个文件：
 
-- `Undead-Survivor-0.7.0.exe`
-- `Multiplayer-Guide-0.7.0.txt`
+- `Undead-Survivor-0.7.1.exe`
+- `Multiplayer-Guide-0.7.1.txt`
 
 所有玩家必须使用相同版本。游戏已包含 Electron、Steam 接口与原生 DLL，无需安装 Node.js，也不要发送 `Undead Survivor Data` 或 `win-unpacked` 文件夹。
 
@@ -62,7 +62,7 @@
 
 **搜索不到房间**
 
-确认所有人都使用 0.7.0，房间尚未开始且人数少于 4。重新搜索或使用完整数字房间号加入。不同联机协议版本不会互相显示。
+确认所有人都使用 0.7.1，房间尚未开始且人数少于 4。重新搜索或使用完整数字房间号加入。不同联机协议版本不会互相显示。
 
 **移动被拉回或僵尸瞬移**
 
@@ -76,4 +76,4 @@ EXE 旁的 `Undead Survivor Data` 保存本机画质、音量、单人排行榜�
 
 源码已通过四名玩家输入隔离、四人 Steam 握手、多人观战切换、波次复活、双客户端完整战斗和单机跳河回归测试。便携版在 GitHub Actions 中执行隐藏、不可聚焦、静音的冷启动，检查原生 Steam DLL、离线资源、中文路径搬迁和设置保存。
 
-0.6.0 已进行双机双账号试玩。0.7.0 新增的三人、四人组合仍建议分别实机检查：全员同时开局、彼此移动和射击、轮流观战、清波复活、全员阵亡结算，以及成员离开后的中止提示。
+0.6.0 已进行双机双账号试玩。0.7.1 新增的三人、四人组合仍建议分别实机检查：全员同时开局、彼此移动和射击、轮流观战、清波复活、全员阵亡结算，以及成员离开后的中止提示。
