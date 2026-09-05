@@ -635,7 +635,7 @@ export class Game {
         if ((gun.piercing || gun.kind === 'melee') && damaged.has(target.id)) continue;
         damaged.add(target.id);
         const multiplier = target.head ? gun.headshotMultiplier ?? 2 : 1;
-        const damage = this.encounter.hit(target.id, target.head, gun.damage * multiplier);
+        const damage = this.encounter.hit(target.id, target.head, gun.damage * multiplier, target.armor ?? true);
         if (damage) {
           if (!this.background && damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(target.id, damage.armorHit), direction);
           if (!this.background && damage.killed) this.blood.burst(hit.point, direction, target.head);
@@ -728,7 +728,7 @@ export class Game {
         if (this.coop && !this.coop.host) continue;
         const head = targetHit.head;
         const multiplier = head ? definition.headshotMultiplier ?? 2 : 1;
-        const damage = this.encounter.hit(targetHit.id, head, definition.damage * multiplier)!;
+        const damage = this.encounter.hit(targetHit.id, head, definition.damage * multiplier, targetHit.armor ?? true)!;
         if (damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(targetHit.id, damage.armorHit), direction);
         // 立即同步外观与碰撞，避免同一帧继续命中已经脱落的护具。
         this.zombieField.sync(this.encounter);

@@ -1,7 +1,7 @@
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { deflateRawSync, inflateRawSync } = require('node:zlib');
-const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v6';
+const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v7';
 const UNRELIABLE_LIMIT = 1150, SNAPSHOT_CHUNK = 690;
 const idOf = value => String(value.steamId64);
 

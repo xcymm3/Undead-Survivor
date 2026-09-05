@@ -36,7 +36,7 @@ describe('Steam 房间与 P2P 协议', () => {
     const { host, guest, lobby, members } = await setup(false);
     expect(host.client.matchmaking.createLobby).toHaveBeenCalledWith(2, 4);
     expect((await guest.search())[0].name).toBe('合作哨站');
-    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v6');
+    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v7');
     await guest.join('999'); expect(await guest.search()).toHaveLength(1);
     members.push(333n, 444n); expect(await guest.search()).toEqual([]);
     members.splice(2);

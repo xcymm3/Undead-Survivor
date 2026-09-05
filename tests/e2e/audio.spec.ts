@@ -4,8 +4,14 @@ test('音量即时生效，静音独立保存，刷新与重开不丢失偏好',
   await page.goto('/');
   await page.getByRole('button', { name: '进入哨站' }).click();
   await expect.poll(async () => (await page.evaluate(() => window.__undeadTower!.snapshot())).audio.musicPlaying).toBe(true);
-  await page.mouse.click(700, 400);
-  expect((await page.evaluate(() => window.__undeadTower!.snapshot())).audio.musicDucked).toBe(true);
+  // 在浏览器任务内同步开火和读取 0.3 秒瞬态，避免低帧率时跨进程点击返回得太晚。
+  const shotAudio = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas')!;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
+    return window.__undeadTower!.snapshot().audio;
+  });
+  expect(shotAudio.musicDucked).toBe(true);
   if ((await page.evaluate(() => window.__undeadTower!.snapshot())).phase === 'playing') await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '游戏设置' }).click();
   expect((await page.evaluate(() => window.__undeadTower!.snapshot())).audio.musicPlaying).toBe(false);

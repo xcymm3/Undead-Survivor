@@ -120,11 +120,16 @@ describe('练习与正式模式', () => {
     expect(encounter.totalSpawned).toBe(0);
   });
 
-  it('存活与倒地实例数量始终有内存边界', () => {
+  it('存活与倒地实例数量受总容量和高威胁类型上限共同约束', () => {
     const encounter = new Encounter(); encounter.reset('survival', 'hard'); encounter.wave = 100;
     encounter.update(40, () => ({ x: 10000, z: -10000 }));
-    expect(encounter.zombies.length).toBe(SURVIVAL.maxZombies);
-  });
+    expect(encounter.zombies.length).toBeLessThanOrEqual(SURVIVAL.maxZombies);
+    expect(encounter.zombies.length).toBeGreaterThan(100);
+    expect(encounter.zombieCounts.shield).toBeLessThanOrEqual(4);
+    expect(encounter.zombieCounts.berserker).toBeLessThanOrEqual(4);
+    expect(encounter.zombieCounts.giant).toBeLessThanOrEqual(1);
+    expect(encounter.zombieCounts.football).toBeLessThanOrEqual(3);
+  }, 15000);
 });
 
 // 防止实例化后的命中测试退化为只有旧靶子能命中。

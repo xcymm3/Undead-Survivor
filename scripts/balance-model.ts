@@ -1,5 +1,5 @@
 import { PerspectiveCamera, Vector3 } from 'three';
-import { ARMOR_SPAWNS, CONFIG, CROWD, WAVES, ZOMBIE_TYPES } from '../src/game/config';
+import { ARMOR_SPAWNS, CONFIG, CROWD, WAVES, ZOMBIE_TYPES, emptyZombieCounts } from '../src/game/config';
 import type { Difficulty, ZombieKind } from '../src/game/config';
 import { distanceToContact, Encounter } from '../src/game/encounter';
 import { Firearm } from '../src/game/firearm';
@@ -16,7 +16,7 @@ export const PLAYER_PROFILES = [
 
 /** 使用实际刷新、移动、血量、伤害、弹匣和换弹逻辑；输入操作由公开的假设参数模拟。 */
 export function simulateRun(difficulty: Difficulty, profile: typeof PLAYER_PROFILES[number], seed: number, fps = 60) {
-  const encounter = new Encounter(); encounter.reset('survival', difficulty);
+  const encounter = new Encounter(seededRandom(seed + 4109)); encounter.reset('survival', difficulty);
   const firearm = new Firearm();
   const camera = new PerspectiveCamera(CONFIG.camera.fov, 1440 / 900, 0.025, 220);
   camera.position.set(0, CONFIG.camera.height, 9); camera.rotation.set(-0.105, 0, 0, 'YXZ'); camera.updateMatrixWorld();
@@ -33,8 +33,8 @@ export function simulateRun(difficulty: Difficulty, profile: typeof PLAYER_PROFI
   let maxAlive = 0;
   let observedSpawns = 0;
   const firstAppearance: Partial<Record<ZombieKind, number>> = {};
-  const spawned = { normal: 0, cone: 0, bucket: 0 };
-  const kills = { normal: 0, cone: 0, bucket: 0 };
+  const spawned = emptyZombieCounts();
+  const kills = emptyZombieCounts();
   const originalKinds = new Map<number, ZombieKind>();
   while (!encounter.failed && encounter.elapsed < 360) {
     firearm.update(dt);

@@ -1,4 +1,4 @@
-import { ARENA, CONFIG, PLAYER, SURVIVAL } from './config';
+import { ARENA, CONFIG, PLAYER, zombieContactRadius } from './config';
 import type { Position, Zombie } from './encounter';
 import { isWater } from './terrain';
 import type { Navigation } from './navigation';
@@ -39,7 +39,7 @@ function movePlayerInDirection(position: Position, direction: Position | null, d
   const dx = direction.x * PLAYER.speed;
   const dz = direction.z * PLAYER.speed;
   const clear = (next: Position) => navigation.clear(position, next, true) && zombies.every(z => z.health <= 0 || height >= PLAYER.zombieClearanceHeight
-    || Math.hypot(next.x - z.x, next.z - z.z) >= SURVIVAL.contactRadius - 1e-6
+    || Math.hypot(next.x - z.x, next.z - z.z) >= zombieContactRadius(z.kind) - 1e-6
     || Math.hypot(next.x - z.x, next.z - z.z) > Math.hypot(position.x - z.x, position.z - z.z));
   for (let remaining = delta; remaining > 1e-8;) {
     const step = Math.min(remaining, 0.025); remaining -= step;

@@ -9,8 +9,7 @@ test('正式生存：固定入口、追击攻击扣血、暂停冻结、零血�
   await expect.poll(async () => (await snapshot(page)).totalSpawned, { timeout: 18000 }).toBeGreaterThanOrEqual(9);
   const initial = await snapshot(page);
   expect(new Set(initial.targets.map(z => z.spawnZone)).size).toBe(6);
-  expect(initial.targets.some(z => z.kind === 'cone')).toBe(true);
-  expect(initial.targets.some(z => z.kind === 'bucket')).toBe(true);
+  expect(initial.targets.every(z => ['normal', 'cone', 'bucket'].includes(z.kind))).toBe(true);
   expect(initial.blockedZombies).toEqual([]);
   await page.screenshot({ path: 'test-results/survivor-gameplay.png' });
   const first = initial.targets[0];

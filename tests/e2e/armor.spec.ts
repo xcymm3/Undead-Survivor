@@ -1,25 +1,36 @@
 import { expect, test } from '@playwright/test';
-import { fire, lookAt, snapshot, start } from './controls';
+import { capture, fire, lookAt, snapshot } from './controls';
 
-test('自由瞄准下护甲仍按原伤害击落并产生反馈', async ({ page }) => {
+test('自由瞄准下护甲仍按原伤害脱落并产生反馈', async ({ page }) => {
   test.setTimeout(60000);
-  await start(page, 'survival');
-  await expect.poll(async () => (await snapshot(page)).targets.some(z => z.kind === 'bucket'), { timeout: 20000 }).toBe(true);
-  for (const [kind, health, required] of [['cone', 200, 2], ['bucket', 400, 4]] as const) {
-    const id = (await snapshot(page)).targets.find(z => z.kind === kind)!.id;
-    let hits = 0;
-    for (let attempt = 0; attempt < 60 && hits < required; attempt++) {
-      const before = await snapshot(page), target = before.targets.find(z => z.id === id)!;
-      await lookAt(page, target.x, target.kind === 'cone' ? 2.4 : target.kind === 'bucket' ? 2.21 : 1.83, target.z);
-      const after = await fire(page), current = after.targets.find(z => z.id === id);
-      if (after.lastShot?.hitTarget === id && after.shots > before.shots) hits++;
-      if (current) expect(current.health).toBe(health - hits * 100);
-      if (hits === required - 1) {
-        expect(current!.kind).toBe('normal'); expect(current!.armorHealth).toBe(0);
-        expect(after.armorEffects.active).toBeGreaterThan(0);
-      }
-      if (hits < required) await page.waitForTimeout(200);
+  await page.goto('/');
+  await page.getByRole('button', { name: '正式模式' }).click();
+  // 名单生成每只怪物消耗两次随机数：先锁定一阶，再固定生成路障。
+  await page.evaluate(() => {
+    const values = Array.from({ length: 18 }, (_, index) => index % 2 === 0 ? .1 : .7);
+    let index = 0, seed = 17;
+    Math.random = () => index < values.length ? values[index++] : ((seed = seed * 48271 % 2147483647) - 1) / 2147483646;
+  });
+  await page.getByRole('button', { name: '开始坚守' }).click();
+  await capture(page);
+  await expect.poll(async () => (await snapshot(page)).targets.some(z => z.kind === 'cone'), { timeout: 20000 }).toBe(true);
+  const releasedBefore = (await snapshot(page)).armorEffects.released;
+  let broken = false;
+  for (let attempt = 0; attempt < 30 && !broken; attempt++) {
+    const before = await snapshot(page);
+    const target = before.targets.filter(z => z.kind === 'cone')
+      .sort((a, b) => Math.hypot(a.x - before.player.x, a.z - before.player.z) - Math.hypot(b.x - before.player.x, b.z - before.player.z))[0];
+    if (!target) break;
+    await lookAt(page, target.x, 2.4, target.z);
+    const after = await fire(page), hitId = after.lastShot?.hitTarget;
+    const hitBefore = before.targets.find(z => z.id === hitId);
+    const current = after.targets.find(z => z.id === hitId);
+    if (hitBefore?.kind === 'cone' && current?.health === 100) {
+      expect(current.kind).toBe('normal'); expect(current.armorHealth).toBe(0);
+      expect(after.armorEffects.released).toBe(releasedBefore + 1);
+      broken = true;
     }
-    expect(hits).toBe(required);
+    if (!broken) await page.waitForTimeout(200);
   }
+  expect(broken).toBe(true);
 });

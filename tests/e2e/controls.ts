@@ -25,7 +25,8 @@ export async function lookAt(page: Page, x: number, y: number, z: number) {
       const movementX = (s.yaw - yaw) / sensitivity, movementY = (s.pitch - pitch) / sensitivity;
       const steps = Math.max(1, Math.ceil(Math.max(Math.abs(movementX), Math.abs(movementY)) / 120));
       for (let step = 0; step < steps; step++) document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointermove', {
-        movementX: movementX / steps, movementY: movementY / steps,
+        movementX: Math.round(movementX * (step + 1) / steps) - Math.round(movementX * step / steps),
+        movementY: Math.round(movementY * (step + 1) / steps) - Math.round(movementY * step / steps),
       }));
     }
   }, { x, y, z, sensitivity: CONFIG.camera.sensitivity });
