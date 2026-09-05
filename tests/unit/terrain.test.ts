@@ -31,6 +31,17 @@ it('助跑跳过河流正常落岸，各帧率下轨迹一致且不能二段跳'
     expect(peak).toBeGreaterThan(1.9); expect(peak).toBeLessThanOrEqual(1.961);
   }
 });
+it('跳河时不会被对岸僵尸的地面碰撞圈卡在河中央', () => {
+  const p = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.35 }, motion = new PlayerMotion();
+  const zombie: Zombie = { id: 1, x: 0, z: riverCenter(0) - RIVER.halfWidth - 0.15, kind: 'normal', health: 100,
+    maxHealth: 100, armorHealth: 0, bornAt: 0, downTime: 0 };
+  motion.jump(); let drowned = false;
+  for (let frame = 0; frame < 120 && !drowned; frame++) drowned = motion.update(p, 0, forward, 1 / 120, nav, [zombie]);
+  expect(drowned).toBe(false);
+  expect(motion.grounded).toBe(true);
+  expect(isWater(p)).toBe(false);
+  expect(p.z).toBeLessThan(riverCenter(0) - RIVER.halfWidth);
+});
 it('步行入水与落在水面判负，水中不能补跳自救，桥面可以步行', () => {
   const p = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.1 };
   expect(new PlayerMotion().update(p, 0, forward, 0.1, nav, [])).toBe(true);

@@ -146,7 +146,7 @@ export class Encounter {
         const target = targets.get(zombie.id);
         const position = target ?? this.player;
         if (target && zombie.attackTarget !== target.id) { zombie.attackTarget = target.id; zombie.attackTime = 0; }
-        const touching = (target ? target.health > 0 && target.height < 1.1 : this.playerHeight < 1.1)
+        const touching = (target ? target.health > 0 && target.height < PLAYER.zombieClearanceHeight : this.playerHeight < PLAYER.zombieClearanceHeight)
           && Math.hypot(zombie.x - position.x, zombie.z - position.z) <= SURVIVAL.contactRadius + 1e-6;
         zombie.attacking = touching;
         if (!touching) { zombie.attackTime = 0; continue; }
