@@ -5,8 +5,10 @@ import type { Navigation } from './navigation';
 
 /** 过滤 Pointer Lock 在 Windows 光标回绕时产生的半屏/整屏瞬时位移。 */
 export function filterPointerMovement(dx: number, dy: number, width: number, height: number, sensitivity: number = CONFIG.camera.sensitivity) {
-  const maximum = Math.min(Math.PI / 2 / sensitivity, Math.PI / 2 / CONFIG.camera.sensitivity);
-  const clean = (value: number, extent: number) => Number.isFinite(value) && Math.abs(value) < Math.min(maximum, Math.max(240, extent * 0.45)) ? value : 0;
+  // Pointer Lock 在 Windows 上偶尔会把光标回绕前后的绝对位置差当作 movementX/Y。
+  // 这类值不一定达到半屏宽，旧阈值会放过一次几十度的突转。正常原始鼠标事件通常远低于此上限。
+  const maximum = Math.min(180, 25 * Math.PI / 180 / Math.max(sensitivity, 1e-6));
+  const clean = (value: number, extent: number) => Number.isFinite(value) && Math.abs(value) <= Math.min(maximum, Math.max(80, extent * 0.2)) ? value : 0;
   return { dx: clean(dx, width), dy: clean(dy, height) };
 }
 
@@ -26,11 +28,6 @@ function movementDirection(yaw: number, keys: ReadonlySet<string>) {
     x: (side * Math.cos(yaw) - forward * Math.sin(yaw)) / length,
     z: (-forward * Math.cos(yaw) - side * Math.sin(yaw)) / length,
   };
-}
-
-/** 空中移动始终朝当前视角正前方，不读取键盘方向。 */
-function airborneDirection(yaw: number): Position {
-  return { x: -Math.sin(yaw), z: -Math.cos(yaw) };
 }
 
 /** 按固定的世界坐标方向移动；逐小步碰撞与沿墙滑动共用导航占地。 */
@@ -68,21 +65,31 @@ export class PlayerMotion {
   velocity = 0;
   grounded = true;
   private requested = false;
-  jump() { if (this.grounded) this.requested = true; }
-  clearInput() { this.requested = false; }
-  reset() { this.height = 0; this.velocity = 0; this.grounded = true; this.requested = false; }
+  private requestedDirection = new Set<string>();
+  private airborneDirection = new Set<string>();
+  jump(keys: ReadonlySet<string> = new Set()) {
+    if (!this.grounded) return;
+    this.requested = true;
+    this.requestedDirection = new Set([...keys].filter(key => /^Key[WASD]$/.test(key)));
+  }
+  clearInput() { this.requested = false; this.requestedDirection.clear(); }
+  reset() {
+    this.height = 0; this.velocity = 0; this.grounded = true; this.requested = false;
+    this.requestedDirection.clear(); this.airborneDirection.clear();
+  }
   update(position: Position, yaw: number, keys: ReadonlySet<string>, delta: number, navigation: Navigation, zombies: readonly Zombie[]) {
     if (!Number.isFinite(delta) || delta <= 0) return false;
     if (this.grounded && navigation.river && isWater(position)) return true;
     if (this.requested && this.grounded) {
       this.velocity = PLAYER.jumpSpeed;
       this.grounded = false;
+      this.airborneDirection = new Set(this.requestedDirection);
     }
-    this.requested = false;
+    this.requested = false; this.requestedDirection.clear();
     for (let remaining = delta; remaining > 1e-8;) {
       const step = Math.min(remaining, 0.01); remaining -= step;
       const wasGrounded = this.grounded;
-      movePlayerInDirection(position, wasGrounded ? movementDirection(yaw, keys) : airborneDirection(yaw), step, navigation, zombies, this.height);
+      movePlayerInDirection(position, wasGrounded ? movementDirection(yaw, keys) : movementDirection(yaw, this.airborneDirection), step, navigation, zombies, this.height);
       if (!this.grounded) {
         this.height += this.velocity * step - PLAYER.gravity * step * step / 2;
         this.velocity -= PLAYER.gravity * step;

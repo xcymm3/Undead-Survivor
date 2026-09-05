@@ -14,7 +14,7 @@ test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async
   });
   const shore = await snapshot(page);
   expect(shore.overWater).toBe(false); expect(shore.player.z).toBeLessThan(-15.1);
-  // 沿岸完成暂停验收，避免新的自动前跳提前跨过河流。
+  // 沿岸原地跳完成暂停验收，避免提前跨过河流。
   await lookAt(page, -20, 1.7, shore.player.z);
   await page.evaluate(async () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
@@ -31,8 +31,8 @@ test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async
   const beforeCrossing = await snapshot(page);
   await lookAt(page, beforeCrossing.player.x, 1.7, -40);
   const crossing = await page.evaluate(async () => {
-    // 故意按住反方向键，验证腾空后 WASD 不会改变视角决定的前跳方向。
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS' }));
+    // 起跳时按住前进键，按离地瞬间的方向跨河。
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
     let airborne = false, overWater = false;
@@ -43,7 +43,7 @@ test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async
       airborne ||= !s.jump.grounded; overWater ||= s.overWater && s.jump.height > 0;
       if (s.phase !== 'playing' || (airborne && s.jump.grounded)) break;
     }
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
     return { airborne, overWater, state: window.__undeadTower!.snapshot() };
   });
   expect(crossing.airborne).toBe(true); expect(crossing.overWater).toBe(true);

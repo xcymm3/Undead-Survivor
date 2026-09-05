@@ -20,7 +20,7 @@ it('河道连续贯穿场地，只在两座桥下开放通行', () => {
 it('助跑跳过河流正常落岸，各帧率下轨迹一致且不能二段跳', () => {
   for (const fps of [20, 60, 144]) {
     const p = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.35 }, motion = new PlayerMotion();
-    motion.jump(); let peak = 0;
+    motion.jump(forward); let peak = 0;
     for (let frame = 0; frame < fps; frame++) {
       if (frame === Math.floor(fps / 3)) motion.jump();
       expect(motion.update(p, 0, forward, 1 / fps, nav, [])).toBe(false);
@@ -31,27 +31,41 @@ it('助跑跳过河流正常落岸，各帧率下轨迹一致且不能二段跳'
     expect(peak).toBeGreaterThan(1.9); expect(peak).toBeLessThanOrEqual(1.961);
   }
 });
-it('空中只按当前视角前进并忽略 WASD，落地后恢复键盘移动', () => {
+it('起跳时锁定 WASD 方向，空中忽略后续按键并可随视角转向，落地后恢复键盘移动', () => {
   const p = { x: 0, z: 5 }, motion = new PlayerMotion();
-  motion.jump();
-  motion.update(p, 0, new Set(['KeyS']), 0.2, nav, []);
+  motion.jump(new Set(['KeyS']));
+  motion.update(p, 0, new Set(['KeyW']), 0.2, nav, []);
   const turnedAt = { ...p };
+  expect(turnedAt.z).toBeGreaterThan(5.8);
   for (let frame = 0; frame < 240 && !motion.grounded; frame++) {
-    motion.update(p, Math.PI / 2, new Set(['KeyD', 'KeyS']), 1 / 120, nav, []);
+    motion.update(p, Math.PI / 2, new Set(['KeyW']), 1 / 120, nav, []);
   }
   expect(motion.grounded).toBe(true);
-  expect(p.x).toBeLessThan(turnedAt.x - 2.5);
+  expect(p.x).toBeGreaterThan(turnedAt.x + 2.5);
   expect(p.z).toBeCloseTo(turnedAt.z, 8);
   const landed = { ...p };
   motion.update(p, 0, new Set(['KeyD']), 0.1, nav, []);
   expect(p.x).toBeGreaterThan(landed.x + 0.4);
   expect(p.z).toBeCloseTo(landed.z, 8);
 });
+it('起跳瞬间支持侧向、斜向与无方向原地跳', () => {
+  const positions = [
+    { keys: new Set(['KeyA']), expected: { x: -1, z: 0 } },
+    { keys: new Set(['KeyW', 'KeyD']), expected: { x: 1, z: -1 } },
+    { keys: new Set<string>(), expected: { x: 0, z: 0 } },
+  ];
+  for (const { keys, expected } of positions) {
+    const p = { x: 0, z: 5 }, motion = new PlayerMotion();
+    motion.jump(keys); motion.update(p, 0, new Set(['KeyS']), 0.2, nav, []);
+    expect(Math.sign(p.x)).toBe(expected.x); expect(Math.sign(p.z - 5)).toBe(expected.z);
+    expect(motion.grounded).toBe(false);
+  }
+});
 it('跳河时不会被对岸僵尸的地面碰撞圈卡在河中央', () => {
   const p = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.35 }, motion = new PlayerMotion();
   const zombie: Zombie = { id: 1, x: 0, z: riverCenter(0) - RIVER.halfWidth - 0.15, kind: 'normal', health: 100,
     maxHealth: 100, armorHealth: 0, bornAt: 0, downTime: 0 };
-  motion.jump(); let drowned = false;
+  motion.jump(forward); let drowned = false;
   for (let frame = 0; frame < 120 && !drowned; frame++) drowned = motion.update(p, 0, forward, 1 / 120, nav, [zombie]);
   expect(drowned).toBe(false);
   expect(motion.grounded).toBe(true);
@@ -61,10 +75,10 @@ it('跳河时不会被对岸僵尸的地面碰撞圈卡在河中央', () => {
 it('步行入水与落在水面判负，水中不能补跳自救，桥面可以步行', () => {
   const p = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.1 };
   expect(new PlayerMotion().update(p, 0, forward, 0.1, nav, [])).toBe(true);
-  const wet = new PlayerMotion(); wet.jump();
+  const wet = new PlayerMotion(); wet.jump(forward);
   expect(wet.update({ x: 0, z: riverCenter(0) }, 0, forward, 0.1, nav, [])).toBe(true);
   const short = new PlayerMotion(), landing = { x: 0, z: riverCenter(0) + RIVER.halfWidth + 0.1 };
-  short.jump(); expect(short.update(landing, 0, forward, 0.35, nav, [])).toBe(false);
+  short.jump(forward); expect(short.update(landing, 0, forward, 0.35, nav, [])).toBe(false);
   expect(short.update(landing, Math.PI / 2, new Set(), 0.7, nav, [])).toBe(true);
   for (const b of BRIDGES) {
     const walker = { x: b.x, z: b.z + 4.5 };
@@ -74,7 +88,7 @@ it('步行入水与落在水面判负，水中不能补跳自救，桥面可以�
 });
 it('暂停冻结空中轨迹，恢复后正常落地', () => {
   const motion = new PlayerMotion(), p = { x: 0, z: 5 };
-  motion.jump(); motion.update(p, 0, forward, 0.2, nav, []);
+  motion.jump(forward); motion.update(p, 0, forward, 0.2, nav, []);
   const before = { y: motion.height, v: motion.velocity, ...p };
   motion.clearInput(); motion.update(p, 0, forward, 0, nav, []);
   expect({ y: motion.height, v: motion.velocity, ...p }).toEqual(before);

@@ -43,6 +43,13 @@ describe('自由视角与枪口瞄准', () => {
     const wrapped = filterPointerMovement(1428, 0, 1440, 900);
     expect(turnView(before.yaw, before.pitch, wrapped.dx, wrapped.dy)).toEqual(before);
   });
+  it('忽略未达到半屏但足以造成视角突转的单次异常位移', () => {
+    expect(filterPointerMovement(260, -210, 2560, 1440)).toEqual({ dx: 0, dy: 0 });
+    expect(filterPointerMovement(80, -60, 2560, 1440)).toEqual({ dx: 80, dy: -60 });
+    const fast = lookSensitivityRadians(200);
+    expect(filterPointerMovement(120, 0, 1920, 1080, fast).dx).toBe(0);
+    expect(filterPointerMovement(80, 0, 1920, 1080, fast).dx).toBe(80);
+  });
   it('近处地面命中不会让第一人称枪模突然向相机收敛', () => {
     const near = new Vector3(0, 0, -1.7);
     const visual = visualWeaponTarget(near);

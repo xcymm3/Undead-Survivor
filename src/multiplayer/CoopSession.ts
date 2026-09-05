@@ -82,7 +82,7 @@ export class CoopSession {
         if (data.seq <= controller.inputSeq) return;
         controller.inputSeq = data.seq; controller.keys = new Set(data.keys); player.yaw = data.yaw; player.pitch = data.pitch;
         controller.lastInputAt = performance.now();
-        if (data.jump > controller.jump && player.health > 0) controller.motion.jump();
+        if (data.jump > controller.jump && player.health > 0) controller.motion.jump(controller.keys);
         controller.jump = data.jump;
       } else {
         if (data.seq <= controller.commandSeq) return;

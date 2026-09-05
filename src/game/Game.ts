@@ -265,7 +265,7 @@ export class Game {
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (event.code === 'Escape') { event.preventDefault(); if (this.phase === 'playing') this.pause(); else if (this.phase === 'paused') this.start(); }
     if (this.phase !== 'playing') return;
-    if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked && (!this.coop || this.coop.local.health > 0)) { this.playerMotion.jump(); this.jumpSequence++; } }
+    if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked && (!this.coop || this.coop.local.health > 0)) { this.playerMotion.jump(this.keys); this.jumpSequence++; } }
     if (/^Key[WASD]$/.test(event.code)) { event.preventDefault(); if (this.pointerLocked) this.keys.add(event.code); }
     const weaponKey = /^(?:Digit|Numpad)([0-9])$/.exec(event.code);
     if (weaponKey) {
