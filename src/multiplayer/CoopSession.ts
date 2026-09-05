@@ -32,7 +32,7 @@ export class CoopSession {
     private send: (data: unknown) => void) {
     this.host = match.host === match.local;
     this.players = match.members.map((m, i) => ({ ...m, x: i ? 2 : -2, z: 9, height: 0, yaw: 0, pitch: 0,
-      health: 100, lastDamageAt: -1e6, weapon: 0, shots: 0 }));
+      health: 100, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1 }));
     if (this.host) encounter.setCombatants(this.players, this.players.map(() => new Navigation(navigation.obstacles, true)));
     Object.assign(encounter.player, { x: this.local.x, z: this.local.z });
   }
@@ -127,6 +127,7 @@ export class CoopSession {
     }
     if (this.remote.health === 0) this.commands = [];
     this.remote.weapon = this.remoteArsenal.active; this.remote.shots = this.remoteArsenal.shots;
+    this.remote.ammo = this.remoteArsenal.gun.ammo; this.remote.reloading = this.remoteArsenal.gun.reloading; this.remote.reloadProgress = this.remoteArsenal.gun.animationProgress;
   }
   sendHit(head: boolean, killed: boolean, armorBroken: boolean) { this.send({ type: 'hit', head, killed, armorBroken }); }
   broadcast(delta: number, force = false) {

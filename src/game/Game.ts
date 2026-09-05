@@ -71,6 +71,10 @@ export class Game {
   private trigger = false;
   private recoil = 0;
   private flashTime = 0;
+  private displayedWeapon = 0;
+  private spectatingPlayer: string | null = null;
+  private spectatorShots = 0;
+  private spectatorFireRemaining = 0;
   private elapsed = 0;
   private frameId = 0;
   private previousTime = 0;
@@ -286,7 +290,7 @@ export class Game {
     this.camera.position.set(0, CONFIG.camera.height, 9); this.camera.fov = CONFIG.camera.fov; this.camera.updateProjectionMatrix();
     this.audio.resetMusic();
     this.weapon.root.visible = true;
-    this.arsenal.reset(); this.weapon.select(0); this.hitCount = 0; this.kills = 0;
+    this.arsenal.reset(); this.weapon.select(0); this.displayedWeapon = 0; this.hitCount = 0; this.kills = 0;
     this.encounter.reset(mode, FIXED_DIFFICULTY); this.playerMotion.reset();
     this.keys.clear(); this.navigation.setGoal(this.encounter.player);
     this.spawns.reset();
@@ -296,6 +300,7 @@ export class Game {
     this.result = null;
     this.elapsed = 0;
     this.view.set(0, 0); this.aim.set(0, 0); this.recoil = 0; this.flashTime = 0; this.lastShot = null;
+    this.spectatingPlayer = null; this.spectatorShots = 0; this.spectatorFireRemaining = 0;
     this.renderer.shadowMap.needsUpdate = true;
     for (const effect of this.effects) this.scene.remove(effect.mesh);
     this.effects = [];
@@ -321,7 +326,7 @@ export class Game {
       if (this.background) {
         const previousWeapon = this.arsenal.active;
         this.arsenal.update(.05);
-        if (this.arsenal.active !== previousWeapon) this.weapon.select(this.arsenal.active);
+        if (this.arsenal.active !== previousWeapon) { this.weapon.select(this.arsenal.active); this.displayedWeapon = this.arsenal.active; }
         this.advanceCoop(.05); this.publish();
       }
       if (performance.now() - this.coop.lastPacketAt > 20000) {
@@ -445,23 +450,43 @@ export class Game {
     return [...this.world.surfaces, this.zombieField];
   }
 
-  private updateAim(_delta: number) {
+  private updateAim(delta: number) {
     const spectated = this.coop?.local.health === 0 ? this.coop.remote : null;
     this.camera.position.set(spectated?.x ?? this.encounter.player.x, CONFIG.camera.height + (spectated?.height ?? this.playerMotion.height), spectated?.z ?? this.encounter.player.z);
-    this.camera.rotation.set(this.view.y, this.view.x, 0, 'YXZ');
+    this.camera.rotation.set(spectated?.pitch ?? this.view.y, spectated?.yaw ?? this.view.x, 0, 'YXZ');
     this.camera.updateMatrixWorld(true);
     this.raycaster.setFromCamera(this.aim, this.camera);
     this.raycaster.far = CONFIG.weapon.range;
     const hit = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0];
     this.aimPoint.copy(hit?.point ?? this.raycaster.ray.at(CONFIG.weapon.range, new THREE.Vector3()));
     const gun = this.firearm;
-    this.weapon.animate(gun.reloading ? 'reload' : gun.fireRemaining > 0 ? 'fire' : 'idle', gun.reloading ? gun.animationProgress : gun.fireProgress);
-    this.host.parentElement?.style.setProperty('--reload-progress', String(gun.reloadProgress));
-    const p = gun.reloadProgress;
-    const reloadMotion = gun.reloading ? Math.sin(Math.PI * p) : 0;
-    const drop = this.arsenal.switching ? Math.sin(Math.PI * this.arsenal.switchProgress) : 0;
+    let reloadMotion = 0, drop = 0, definition = gun.definition;
+    if (spectated) {
+      const weaponIndex = Math.min(WEAPONS.length - 1, Math.max(0, spectated.weapon));
+      definition = WEAPONS[weaponIndex];
+      if (this.spectatingPlayer !== spectated.id) {
+        this.spectatingPlayer = spectated.id; this.spectatorShots = spectated.shots; this.spectatorFireRemaining = 0;
+      }
+      if (this.displayedWeapon !== weaponIndex) { this.weapon.select(weaponIndex); this.displayedWeapon = weaponIndex; }
+      if (spectated.shots > this.spectatorShots) {
+        this.spectatorFireRemaining = definition.fireDuration;
+        this.flashTime = 0.065;
+        this.recoil = Math.min(1, this.recoil + definition.recoil);
+      }
+      this.spectatorShots = Math.max(this.spectatorShots, spectated.shots);
+      this.spectatorFireRemaining = Math.max(0, this.spectatorFireRemaining - delta);
+      this.weapon.animate(spectated.reloading ? 'reload' : this.spectatorFireRemaining > 0 ? 'fire' : 'idle', spectated.reloading ? spectated.reloadProgress : this.spectatorFireRemaining > 0 ? 1 - this.spectatorFireRemaining / definition.fireDuration : 1);
+      this.host.parentElement?.style.setProperty('--reload-progress', String(spectated.reloading ? spectated.reloadProgress : 0));
+    } else {
+      this.spectatingPlayer = null; this.spectatorShots = 0; this.spectatorFireRemaining = 0;
+      if (this.displayedWeapon !== this.arsenal.active) { this.weapon.select(this.arsenal.active); this.displayedWeapon = this.arsenal.active; }
+      this.weapon.animate(gun.reloading ? 'reload' : gun.fireRemaining > 0 ? 'fire' : 'idle', gun.reloading ? gun.animationProgress : gun.fireProgress);
+      this.host.parentElement?.style.setProperty('--reload-progress', String(gun.reloadProgress));
+      reloadMotion = gun.reloading ? Math.sin(Math.PI * gun.reloadProgress) : 0;
+      drop = this.arsenal.switching ? Math.sin(Math.PI * this.arsenal.switchProgress) : 0;
+    }
     const viewX = Math.min(0.38, Math.tan(THREE.MathUtils.degToRad(CONFIG.camera.fov / 2)) * this.camera.aspect * 0.8);
-    const viewY = gun.definition.length < 0.6 ? -0.32 : -0.40;
+    const viewY = definition.length < 0.6 ? -0.32 : -0.40;
     this.weapon.root.position.set((viewX - reloadMotion * 0.04) * 0.5, (viewY - drop * 1.45 + reloadMotion * 0.08 - this.recoil * 0.025) * 0.5, -0.38 + this.recoil * 0.04);
     const localTarget = this.camera.worldToLocal(this.aimPoint.clone());
     this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, localTarget));
@@ -525,6 +550,7 @@ export class Game {
           local.x = this.encounter.player.x; local.z = this.encounter.player.z; local.height = this.playerMotion.height;
         }
         local.yaw = this.view.x; local.pitch = this.view.y; local.weapon = this.arsenal.active; local.shots = this.arsenal.shots;
+        local.ammo = this.firearm.ammo; local.reloading = this.firearm.reloading; local.reloadProgress = this.firearm.animationProgress;
         coop.advanceRemote(step, this.navigation, this.remoteShoot);
       });
       coop.broadcast(delta);
@@ -544,7 +570,7 @@ export class Game {
       for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); this.audio.tone(950, 450, .07, .025); }
     }
     this.encounter.health = local.health; this.encounter.lastDamageAt = local.lastDamageAt; this.kills = this.encounter.kills;
-    this.weapon.root.visible = local.health > 0;
+    this.weapon.root.visible = local.health > 0 || coop.remote.health > 0;
     if (local.health === 0) { this.keys.clear(); this.trigger = false; }
     this.partner?.update(coop.remote, delta, local.health === 0, this.encounter.elapsed);
     if (this.encounter.failed) this.endRun();
@@ -640,7 +666,10 @@ export class Game {
         const velocity = new THREE.Vector3(1.8, 1.2, 0.1).applyQuaternion(this.camera.quaternion);
         this.addEffect(shellOrigin, velocity, new THREE.Vector3(0.03, 0.025, 0.085), gun.definition.shellReload ? 0x984038 : 0xbb9751, 0.85, 5, true, false);
       }
-      if (this.arsenal.active !== previousActive) { this.weapon.select(this.arsenal.active); this.recoil = 0; this.flashTime = 0; this.audio.tone(230, 350, 0.07, 0.03); this.publish(); }
+      if (this.arsenal.active !== previousActive) {
+        if (!this.coop || this.coop.local.health > 0) { this.weapon.select(this.arsenal.active); this.displayedWeapon = this.arsenal.active; }
+        this.recoil = 0; this.flashTime = 0; this.audio.tone(230, 350, 0.07, 0.03); this.publish();
+      }
       if (this.arsenal.switching !== wasSwitching) this.publish();
       if (!wasReloading && this.firearm.reloading) { this.audio.tone(660, 220, 0.09, 0.035); this.publish(); }
       if (this.firearm.definition.shellReload && this.firearm.ammo > previousAmmo && previousGun === this.firearm) { this.audio.tone(180, 380, 0.055, 0.035); this.publish(); }
@@ -699,7 +728,9 @@ export class Game {
 
   private publish() {
     const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0 } : undefined;
-    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
+    const observed = this.coop?.local.health === 0 ? this.coop.remote : null;
+    const inventory = observed ? WEAPONS.map((gun, index) => index === observed.weapon ? observed.ammo : gun.capacity) : this.arsenal.guns.map(gun => gun.ammo);
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: observed?.reloading ?? this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, inventory });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -731,7 +762,7 @@ export class Game {
       flashVisible: this.weapon.flash.visible, weaponVisible: this.weapon.root.visible, effects: this.effects.length, lastShot: this.lastShot, drawCalls: this.renderer.info.render.calls, renderCount: this.renderCount, fps: this.fps,
       blood: this.blood.diagnostics(),
       armorEffects: this.armorEffects.diagnostics(), audio: this.audio.diagnostics(), breach: this.breachFeedback(), defenseVisible: false,
-      breachElapsed: this.breachSequence.elapsed, cameraPosition: this.camera.position.toArray(), cameraFov: this.camera.fov,
+      breachElapsed: this.breachSequence.elapsed, cameraPosition: this.camera.position.toArray(), cameraYaw: this.camera.rotation.y, cameraPitch: this.camera.rotation.x, cameraFov: this.camera.fov,
       obstacles: this.world.obstacles, blockedZombies: this.encounter.zombies.filter(z => z.health > 0 && !this.navigation.clear(z, z)).map(z => z.id),
       weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, switchProgress: this.arsenal.switchProgress, inventory: this.arsenal.guns.map(gun => gun.ammo), weaponAnimation: this.weapon.diagnostics(),
       graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics },

@@ -14,6 +14,7 @@ export interface SteamBridge {
 declare global { interface Window { steamCoop?: SteamBridge; } }
 export interface Pawn extends Member {
   x: number; z: number; height: number; yaw: number; pitch: number; health: number; lastDamageAt: number; weapon: number; shots: number;
+  ammo: number; reloading: boolean; reloadProgress: number;
 }
 export type Command = { type: 'input'; seq: number; keys: string[]; yaw: number; pitch: number; jump: number }
   | { type: 'fire'; seq: number; yaw: number; pitch: number }
@@ -47,7 +48,8 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && finite(p.x, 22) && finite(p.z, 48) && finite(p.height, 3) && p.height >= 0
       && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && finite(p.health, 100) && p.health >= 0
       && Number.isFinite(p.lastDamageAt) && Number.isInteger(p.weapon) && p.weapon >= 0 && p.weapon < 6
-      && Number.isSafeInteger(p.shots) && p.shots >= 0)
+      && Number.isSafeInteger(p.shots) && p.shots >= 0 && Number.isInteger(p.ammo) && p.ammo >= 0 && p.ammo <= 50
+      && typeof p.reloading === 'boolean' && finite(p.reloadProgress, 1) && p.reloadProgress >= 0)
     && Array.isArray(s.zombies) && s.zombies.length <= 256 && s.zombies.every(z => z && typeof z === 'object') && new Set(s.zombies.map(z => z.id)).size === s.zombies.length
     && s.zombies.every(z => Number.isSafeInteger(z.id) && z.id >= 0 && ['normal', 'cone', 'bucket'].includes(z.kind)
       && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, 400) && z.health >= 0 && finite(z.armorHealth, 300)

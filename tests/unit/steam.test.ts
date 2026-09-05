@@ -35,7 +35,7 @@ describe('Steam 房间与 P2P 协议', () => {
     const { host, guest, lobby } = await setup(false);
     expect(host.client.matchmaking.createLobby).toHaveBeenCalledWith(2, 2);
     expect((await guest.search())[0].name).toBe('合作哨站');
-    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v2');
+    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v3');
     await guest.join('999'); expect(await guest.search()).toEqual([]);
     guest.leave(); lobby.setData('protocol', 'old');
     await expect(guest.join('999')).rejects.toThrow('不兼容');
@@ -76,7 +76,7 @@ describe('Steam 房间与 P2P 协议', () => {
     const { host, guest, events, queues } = await setup(); host.start(); guest.poll(); host.poll(); guest.poll();
     const baseline = events['111'].length;
     for (const [from, game, session] of [['333', 'xcymm3.undead-survivor', host.match.session], ['222', 'another-game', host.match.session], ['222', 'xcymm3.undead-survivor', 'old-session']]) {
-      queues.get('111')!.push({ steamId: { steamId64: BigInt(from) }, data: Buffer.from(JSON.stringify({ game, version: 'coop-v2', room: '999', type: 'data', session, payload: { health: 0 } })) });
+      queues.get('111')!.push({ steamId: { steamId64: BigInt(from) }, data: Buffer.from(JSON.stringify({ game, version: 'coop-v3', room: '999', type: 'data', session, payload: { health: 0 } })) });
     }
     host.poll(); expect(events['111']).toHaveLength(baseline);
   });

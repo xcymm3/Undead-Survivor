@@ -37,6 +37,8 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
         if (method === 'leave') { room = null; await publish(); }
       });
       await pages[i].addInitScript(() => {
+        // 双端共用一块无界面 GPU，使用测试画质避免后处理争抢资源干扰网络时序。
+        localStorage.setItem('undead-survivor.graphics', JSON.stringify({ resolutionScale: 0.5, antiAliasing: 'off', shadows: 'off', effects: 'low', viewDistance: 'near', frameLimit: 60, pixelated: false }));
         const listeners = new Set<(e: SteamEvent) => void>();
         const call = (method: string, value?: unknown) => (window as any).__testSteamCall(method, value);
         (window as any).__testSteamEvent = (event: SteamEvent) => listeners.forEach(fn => fn(event));
@@ -55,7 +57,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await expect(host.getByText('两人已到齐，可以开始。')).toBeVisible();
     await host.screenshot({ path: 'test-results/coop-room.png' });
     await host.getByRole('button', { name: '开始双人游戏' }).click();
-    await expect.poll(async () => (await snapshot(guest)).coop?.players.length).toBe(2);
+    await expect.poll(async () => (await snapshot(guest)).coop?.players.length, { timeout: 15000 }).toBe(2);
     async function control(page: Page) {
       // 两个测试客户端共用一个无界面浏览器，先释放另一页的鼠标锁，避免同时争抢。
       for (const other of pages) if (other !== page) {
@@ -64,7 +66,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
       }
       await page.bringToFront();
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-      if ((await snapshot(page)).phase === 'paused') await page.getByRole('button', { name: '返回战斗' }).click();
+      if ((await snapshot(page)).phase === 'paused') await page.getByRole('button', { name: /返回(?:战斗|观战)/ }).click();
       await capture(page);
     }
     await control(guest);
@@ -130,6 +132,20 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await expect(guest.getByText('你已阵亡 · 正在观战队友')).toBeVisible();
     expect((await snapshot(host)).health).toBeGreaterThan(0);
     expect((await snapshot(guest)).phase).toBe('playing');
+    await control(host); await host.keyboard.press('2');
+    await expect.poll(async () => (await snapshot(host)).weaponIndex).toBe(1);
+    await lookAt(host, 7, 2.4, -31);
+    await expect.poll(async () => (await snapshot(guest)).coop?.players.find(player => player.id === '111')?.weapon).toBe(1);
+    await control(guest);
+    const watchedHost = await snapshot(host), spectator = await snapshot(guest);
+    expect(spectator.weaponVisible).toBe(true);
+    expect(spectator.weaponAnimation.model).toBe(WEAPONS[1].model);
+    await expect(guest.getByTestId('weapon-name')).toContainText(WEAPONS[1].label);
+    await expect(guest.getByTestId('ammo')).toHaveText(String(WEAPONS[1].capacity));
+    expect(spectator.cameraPosition[0]).toBeCloseTo(watchedHost.player.x, 1);
+    expect(spectator.cameraPosition[2]).toBeCloseTo(watchedHost.player.z, 1);
+    expect(spectator.cameraYaw).toBeCloseTo(watchedHost.yaw, 2);
+    expect(spectator.cameraPitch).toBeCloseTo(watchedHost.pitch, 2);
     await guest.screenshot({ path: 'test-results/coop-spectating.png' });
     await guest.evaluate(() => window.dispatchEvent(new Event('blur')));
     await control(host); await lookAt(host, -2, 1.7, -40); await host.keyboard.down('w');
