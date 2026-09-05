@@ -20,8 +20,10 @@ export async function lookAt(page: Page, x: number, y: number, z: number) {
     const s = window.__undeadTower!.snapshot();
     const dx = x - s.cameraPosition[0], dy = y - s.cameraPosition[1], dz = z - s.cameraPosition[2];
     const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
-    document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointermove', {
-      movementX: (s.yaw - yaw) / sensitivity, movementY: (s.pitch - pitch) / sensitivity,
+    const movementX = (s.yaw - yaw) / sensitivity, movementY = (s.pitch - pitch) / sensitivity;
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(movementX), Math.abs(movementY)) / 120));
+    for (let step = 0; step < steps; step++) document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointermove', {
+      movementX: movementX / steps, movementY: movementY / steps,
     }));
   }, { x, y, z, sensitivity: CONFIG.camera.sensitivity });
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));

@@ -10,7 +10,7 @@ import type { PersonalRecord } from './game/leaderboard';
 import { BreachOverlay, DeploymentPanel, LeaderboardTable, ResultPanel } from './ui/SessionPanels';
 import { MultiplayerPanel } from './ui/MultiplayerPanel';
 
-const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false, graphicsPreset: 'quality', graphics: { ...DEFAULT_GRAPHICS_SETTINGS }, renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
+const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, sensitivity: 100, breach: null, pixelated: false, graphicsPreset: 'quality', graphics: { ...DEFAULT_GRAPHICS_SETTINGS }, renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
 
 const graphicsPresets: { id: GraphicsPreset; label: string }[] = [
   { id: 'ultra-performance', label: '极致性能' }, { id: 'performance', label: '性能' }, { id: 'balanced', label: '平衡' }, { id: 'quality', label: '画质' }, { id: 'ultra-quality', label: '极致画质' },
@@ -41,6 +41,7 @@ export function App() {
   const dialog = useRef<HTMLDialogElement>(null);
   const resumeAfterSettings = useRef(false);
   const [state, setState] = useState(initialState);
+  const [sensitivityInput, setSensitivityInput] = useState(String(initialState.sensitivity));
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(false);
   const [multiplayer, setMultiplayer] = useState(false);
@@ -53,6 +54,14 @@ export function App() {
   const [leaderboard] = useState(() => new LeaderboardStore());
   const [entries, setEntries] = useState(() => leaderboard.read());
   const [saved, setSaved] = useState(leaderboard.persistent);
+
+  useEffect(() => setSensitivityInput(String(state.sensitivity)), [state.sensitivity]);
+
+  const commitSensitivityInput = () => {
+    const value = Number(sensitivityInput);
+    if (sensitivityInput.trim() && Number.isFinite(value)) game.current?.setSensitivity(value);
+    else setSensitivityInput(String(state.sensitivity));
+  };
 
   useEffect(() => {
     if (!host.current) return;
@@ -195,6 +204,7 @@ export function App() {
       <div className="view-limits"><Icon name="aim" /><p>水平 360°<span>垂直 ±85°</span><small>WASD 移动，空格跳跃。点击捕获鼠标，ESC 暂停。</small></p></div>
       <label className="toggle-row"><span>游戏声音<small>射击、护甲、死亡与低音量背景音乐</small></span><input type="checkbox" checked={state.sound} onChange={event => game.current?.setSound(event.target.checked)} /><i /></label>
       <div className="volume-control"><label htmlFor="volume">总音量 <b>{Math.round(state.volume * 100)}%{!state.sound && ' · 已静音'}</b></label><input id="volume" type="range" min="0" max="100" step="1" value={Math.round(state.volume * 100)} onChange={event => game.current?.setVolume(Number(event.target.value) / 100)} /><small>自动保存音量与静音设置</small></div>
+      <div className="sensitivity-control"><div className="sensitivity-heading"><label htmlFor="sensitivity-range">鼠标灵敏度</label><div><input aria-label="鼠标灵敏度数值" type="number" min="10" max="200" step="1" value={sensitivityInput} onChange={event => { const value = event.target.value; setSensitivityInput(value); const number = Number(value); if (value.trim() && Number.isFinite(number) && number >= 10 && number <= 200) game.current?.setSensitivity(number); }} onBlur={commitSensitivityInput} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /><span>%</span></div></div><input id="sensitivity-range" aria-label="鼠标灵敏度滑块" type="range" min="10" max="200" step="1" value={state.sensitivity} onChange={event => game.current?.setSensitivity(event.target.valueAsNumber)} /><small>10%～200%，可拖动或输入数值，自动保存在本机</small></div>
       <section className="graphics-panel" aria-labelledby="graphics-title">
         <div className="graphics-heading"><div><span className="label">GRAPHICS QUALITY</span><h3 id="graphics-title">画质设置</h3></div><output>当前：{state.graphicsPreset === 'custom' ? '自定义' : graphicsPresets.find(item => item.id === state.graphicsPreset)?.label}</output></div>
         <div className="quality-presets" role="group" aria-label="画质预设">{graphicsPresets.map(preset => <button key={preset.id} type="button" aria-pressed={state.graphicsPreset === preset.id} onClick={() => game.current?.applyGraphicsPreset(preset.id)}>{preset.label}</button>)}</div>

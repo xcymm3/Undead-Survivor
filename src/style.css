@@ -260,6 +260,13 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 .volume-control b { font-size: 11px; font-weight: 400; color: var(--color-accent); }
 .volume-control input { display: block; width: 100%; margin: 14px 0 8px; accent-color: var(--color-accent); cursor: pointer; }
 .volume-control small { font-size: 10px; color: var(--color-muted); }
+.sensitivity-control { padding: 16px 0; border-bottom: 1px solid var(--color-rule); }
+.sensitivity-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; }
+.sensitivity-heading div { display: flex; align-items: center; gap: 6px; color: var(--color-accent); font: 11px var(--font-mono); }
+.sensitivity-heading input[type='number'] { width: 72px; border: 1px solid var(--color-rule); padding: 7px 8px; background: var(--color-panel-raised); color: var(--color-ink); font: 11px var(--font-mono); text-align: right; }
+.sensitivity-heading input[type='number']:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.sensitivity-control > input[type='range'] { display: block; width: 100%; margin: 14px 0 8px; accent-color: var(--color-accent); cursor: pointer; }
+.sensitivity-control small { font-size: 10px; color: var(--color-muted); }
 .breach-review { position: absolute; inset: 0; z-index: 6; background: linear-gradient(#161d18a6, transparent 35%, transparent 75%, #161d18c9); pointer-events: none; }
 .breach-title { position: absolute; top: 13%; left: 50%; transform: translateX(-50%); text-align: center; width: 90%; }
 .breach-title .label, .breach-title h2 { color: #ff8872; }

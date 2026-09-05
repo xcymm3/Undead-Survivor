@@ -28,6 +28,7 @@ import { isWater, BRIDGES, RIVER_POINTS } from './terrain';
 import { CoopSession } from '../multiplayer/CoopSession';
 import { PartnerView } from '../multiplayer/PartnerView';
 import type { Match, Pawn } from '../multiplayer/types';
+import { DEFAULT_LOOK_SENSITIVITY, loadLookSensitivity, LOOK_SENSITIVITY_STORAGE_KEY, lookSensitivityRadians, normalizeLookSensitivity } from './controls';
 
 interface Effect { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; gravity: number; spin: boolean; shrink: boolean; }
 interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: boolean, killed: boolean, armorBroken: boolean) => void; onError: (message: string) => void; onEnd: (result: RunResult) => void; }
@@ -89,6 +90,7 @@ export class Game {
   private fpsTime = 0;
   private fps = 60;
   private graphics: GraphicsSettings = { ...DEFAULT_GRAPHICS_SETTINGS };
+  private sensitivity = DEFAULT_LOOK_SENSITIVITY;
   private appliedShadowQuality: ShadowQuality | null = null;
   private effectLimit = 160;
   private renderWidth = 1;
@@ -102,6 +104,7 @@ export class Game {
 
   constructor(private host: HTMLDivElement, private callbacks: GameCallbacks) {
     try { this.graphics = loadGraphicsSettings(localStorage); } catch { /* 禁用存储时沿用默认画质。 */ }
+    try { this.sensitivity = loadLookSensitivity(localStorage); } catch { /* 禁用存储时沿用默认灵敏度。 */ }
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     const gl = this.renderer.getContext();
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
@@ -212,8 +215,9 @@ export class Game {
   }
   private pointerMove = (event: PointerEvent) => {
     if (this.phase !== 'playing' || !this.pointerLocked) return;
-    const movement = filterPointerMovement(event.movementX, event.movementY, this.width, this.height);
-    const next = turnView(this.view.x, this.view.y, movement.dx, movement.dy);
+    const sensitivity = lookSensitivityRadians(this.sensitivity);
+    const movement = filterPointerMovement(event.movementX, event.movementY, this.width, this.height, sensitivity);
+    const next = turnView(this.view.x, this.view.y, movement.dx, movement.dy, sensitivity);
     this.view.set(next.yaw, next.pitch);
   };
 
@@ -402,6 +406,11 @@ export class Game {
   }
   setSound(enabled: boolean) { this.audio.enabled = enabled; if (enabled) this.audio.unlock(); this.publish(); }
   setVolume(volume: number) { this.audio.volume = volume; this.audio.unlock(); this.publish(); }
+  setSensitivity(value: number) {
+    this.sensitivity = normalizeLookSensitivity(value);
+    try { localStorage.setItem(LOOK_SENSITIVITY_STORAGE_KEY, String(this.sensitivity)); } catch { /* 当前会话的灵敏度调节仍然有效。 */ }
+    this.publish();
+  }
   setPixelated(enabled: boolean) { this.setGraphicsOption('pixelated', enabled); }
   applyGraphicsPreset(preset: GraphicsPreset) {
     this.graphics = presetSettings(preset);
@@ -771,7 +780,7 @@ export class Game {
     const observed = this.spectatedPlayer();
     const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0, spectatingId: observed?.id } : undefined;
     const inventory = observed ? WEAPONS.map((gun, index) => index === observed.weapon ? observed.ammo : gun.capacity) : this.arsenal.guns.map(gun => gun.ammo);
-    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: observed?.reloading ?? this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, inventory });
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: observed?.reloading ?? this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, sensitivity: this.sensitivity, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, inventory });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -806,7 +815,7 @@ export class Game {
       breachElapsed: this.breachSequence.elapsed, cameraPosition: this.camera.position.toArray(), cameraYaw: this.camera.rotation.y, cameraPitch: this.camera.rotation.x, cameraFov: this.camera.fov,
       obstacles: this.world.obstacles, blockedZombies: this.encounter.zombies.filter(z => z.health > 0 && !this.navigation.clear(z, z)).map(z => z.id),
       weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, switchProgress: this.arsenal.switchProgress, inventory: this.arsenal.guns.map(gun => gun.ammo), weaponAnimation: this.weapon.diagnostics(),
-      graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics },
+      sensitivity: this.sensitivity, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics },
       renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu },
       reload: { progress: this.firearm.reloadProgress, remaining: this.firearm.reloadRemaining, empty: this.firearm.reloadEmpty, cycle: this.firearm.animationProgress },
       targets: this.encounter.zombies.map(z => ({ id: z.id, kind: z.kind, maxHealth: z.maxHealth, armorHealth: z.armorHealth, bodyHealth: z.health - z.armorHealth, spawnZone: z.spawnZone, health: z.health, x: z.x, z: z.z, bornAt: z.bornAt, avoidance: z.avoidance ?? 0, heading: z.heading, attacking: z.attacking ?? false, attackTime: z.attackTime ?? 0, head: project(new THREE.Vector3(z.x, 1.83, z.z)), chest: project(new THREE.Vector3(z.x, 1.25, z.z + 0.2)) })),

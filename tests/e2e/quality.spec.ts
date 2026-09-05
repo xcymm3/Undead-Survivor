@@ -9,6 +9,10 @@ test('五档预设、自定义画质和本机保存均实际生效', async ({ br
     const diagnostics = () => page.evaluate(() => window.__undeadTower!.snapshot());
     expect((await diagnostics()).renderResolution.scale).toBe(2);
     await page.getByRole('button', { name: '游戏设置' }).click();
+    await page.getByRole('slider', { name: '鼠标灵敏度滑块' }).fill('135');
+    await page.getByRole('spinbutton', { name: '鼠标灵敏度数值' }).fill('72');
+    expect((await diagnostics()).sensitivity).toBe(72);
+    expect(await page.evaluate(() => localStorage.getItem('undead-survivor.look-sensitivity'))).toBe('72');
     await page.getByRole('button', { name: '极致性能', exact: true }).click();
     expect(await diagnostics()).toMatchObject({ graphicsPreset: 'ultra-performance', graphics: { resolutionScale: 0.5, antiAliasing: 'off', shadows: 'off', effects: 'low', viewDistance: 'near', frameLimit: 60, pixelated: true } });
     expect((await diagnostics()).renderResolution.scale).toBeCloseTo(0.68, 2);
@@ -23,7 +27,7 @@ test('五档预设、自定义画质和本机保存均实际生效', async ({ br
     await page.reload();
     await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
     const restored = await diagnostics();
-    expect(restored).toMatchObject({ graphicsPreset: 'custom', graphics: { antiAliasing: 'smaa', frameLimit: 120 } });
+    expect(restored).toMatchObject({ sensitivity: 72, graphicsPreset: 'custom', graphics: { antiAliasing: 'smaa', frameLimit: 120 } });
     expect(restored.renderResolution.width).toBeGreaterThan(960); expect(restored.renderResolution.height).toBeGreaterThan(540);
     expect(restored.renderResolution.gpu.length).toBeGreaterThan(0);
   } finally { await context.close(); }

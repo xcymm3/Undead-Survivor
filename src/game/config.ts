@@ -63,6 +63,7 @@ export interface GameSnapshot {
   pitch: number;
   sound: boolean;
   volume: number;
+  sensitivity: number;
   breach: { id: number; kind: ZombieKind; x: number; y: number; side: string } | null;
   pixelated: boolean;
   graphicsPreset: ActiveGraphicsPreset;

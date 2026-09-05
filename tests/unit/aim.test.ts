@@ -3,6 +3,7 @@ import { Vector3 } from 'three';
 import { MIN_WEAPON_CONVERGENCE, visualWeaponTarget, weaponQuaternion } from '../../src/game/aim';
 import { filterPointerMovement, turnView } from '../../src/game/player';
 import { CONFIG } from '../../src/game/config';
+import { lookSensitivityRadians } from '../../src/game/controls';
 describe('自由视角与枪口瞄准', () => {
   it('水平累积转向超过一圈，俯仰限制防止翻转', () => {
     let view = { yaw: 0, pitch: 0 };
@@ -26,6 +27,12 @@ describe('自由视角与枪口瞄准', () => {
       const expected = target.clone().sub(muzzle).normalize();
       expect(direction.dot(expected)).toBeCloseTo(1, 12);
     }
+  });
+  it('灵敏度百分比按比例改变转向速度', () => {
+    const slow = lookSensitivityRadians(50), fast = lookSensitivityRadians(200);
+    expect(turnView(0, 0, 100, 0, slow).yaw).toBeCloseTo(-0.11);
+    expect(turnView(0, 0, 100, 0, fast).yaw).toBeCloseTo(-0.44);
+    expect(filterPointerMovement(400, 0, 1920, 1080, fast).dx).toBe(0);
   });
   it('低头旋转时忽略 Pointer Lock 产生的整屏回绕位移', () => {
     const normal = filterPointerMovement(-3, 2, 1440, 900);
