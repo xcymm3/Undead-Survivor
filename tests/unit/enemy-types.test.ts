@@ -26,22 +26,25 @@ describe('八类僵尸数值与阶位名单', () => {
     });
   });
 
-  it('每三个波次按设计提高阶位概率', () => {
+  it('第七波起逐波平滑提高阶位概率', () => {
     expect(tierWeights(1)).toEqual([1, 0, 0, 0]);
     expect(tierWeights(4)).toEqual([.92, .08, 0, 0]);
-    expect(tierWeights(7)).toEqual([.75, .20, .05, 0]);
-    expect(tierWeights(10)).toEqual([.47, .35, .15, .03]);
-    expect(tierWeights(13)).toEqual([.32, .35, .25, .08]);
-    expect(tierWeights(16)).toEqual([.20, .30, .35, .15]);
-    expect(tierWeights(19)).toEqual([.10, .25, .40, .25]);
+    expect(tierWeights(7)).toEqual([.86, .12, .02, 0]);
+    expect(tierWeights(8)).toEqual([.81, .15, .04, 0]);
+    expect(tierWeights(9)).toEqual([.76, .18, .06, 0]);
+    expect(tierWeights(10)).toEqual([.70, .22, .07, .01]);
+    expect(tierWeights(11)).toEqual([.65, .25, .08, .02]);
+    expect(tierWeights(12)).toEqual([.60, .28, .10, .03]);
+    expect(tierWeights(100)).toEqual([.60, .28, .10, .03]);
   });
 
-  it('前三波只有一阶；第十波起缺少橄榄球时等量替换一只', () => {
+  it('前三波只有一阶；第十波开始按概率自然抽取四阶', () => {
     for (const wave of [1, 2, 3]) expect(waveRoster(wave, waveSettings(wave).count, 'hard', () => .2)
       .every(kind => ['normal', 'cone', 'bucket'].includes(kind))).toBe(true);
-    const guaranteed = waveRoster(10, waveSettings(10).count, 'hard', () => 0);
-    expect(guaranteed).toHaveLength(63);
-    expect(guaranteed.filter(kind => kind === 'football')).toHaveLength(1);
+    const tierOneRoll = waveRoster(10, waveSettings(10).count, 'hard', () => 0);
+    expect(tierOneRoll).toHaveLength(57);
+    expect(tierOneRoll).not.toContain('football');
+    expect(waveRoster(10, 1, 'hard', () => .999)).toEqual(['football']);
     expect(waveRoster(9, waveSettings(9).count, 'hard', () => 0)).not.toContain('football');
   });
 

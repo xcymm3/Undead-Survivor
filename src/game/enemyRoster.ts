@@ -6,11 +6,12 @@ type Tier = 1 | 2 | 3 | 4;
 const TIER_WEIGHTS: { through: number; weights: readonly [number, number, number, number] }[] = [
   { through: 3, weights: [1, 0, 0, 0] },
   { through: 6, weights: [.92, .08, 0, 0] },
-  { through: 9, weights: [.75, .20, .05, 0] },
-  { through: 12, weights: [.47, .35, .15, .03] },
-  { through: 15, weights: [.32, .35, .25, .08] },
-  { through: 18, weights: [.20, .30, .35, .15] },
-  { through: Infinity, weights: [.10, .25, .40, .25] },
+  { through: 7, weights: [.86, .12, .02, 0] },
+  { through: 8, weights: [.81, .15, .04, 0] },
+  { through: 9, weights: [.76, .18, .06, 0] },
+  { through: 10, weights: [.70, .22, .07, .01] },
+  { through: 11, weights: [.65, .25, .08, .02] },
+  { through: Infinity, weights: [.60, .28, .10, .03] },
 ];
 
 const POOLS: Record<Tier, readonly { kind: ZombieKind; weight: number }[]> = {
@@ -26,7 +27,8 @@ function roll(random: () => number) {
 }
 
 function weighted<T extends { weight: number }>(entries: readonly T[], random: () => number) {
-  const value = roll(random);
+  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  const value = roll(random) * total;
   let cumulative = 0;
   for (const entry of entries) {
     cumulative += entry.weight;
@@ -46,19 +48,11 @@ export function randomZombieKind(wave: number, random: () => number = Math.rando
   return weighted(POOLS[tier], random).kind;
 }
 
-/** 先随机完成整波名单；第十波起若没有四阶单位，再等概率替换一个槽位并重新洗牌。 */
 export function waveRoster(wave: number, count: number, difficulty: Difficulty = 'hard', random: () => number = Math.random) {
   const size = Math.max(0, Math.floor(count));
   if (difficulty === 'easy') return Array<ZombieKind>(size).fill('normal');
-  const roster = Array.from({ length: size }, () => difficulty === 'normal'
+  return Array.from({ length: size }, () => difficulty === 'normal'
     ? weighted(POOLS[1], random).kind : randomZombieKind(wave, random));
-  if (difficulty !== 'hard' || wave < 10 || size === 0 || roster.includes('football')) return roster;
-  roster[Math.floor(roll(random) * roster.length)] = 'football';
-  for (let i = roster.length - 1; i > 0; i--) {
-    const j = Math.floor(roll(random) * (i + 1));
-    [roster[i], roster[j]] = [roster[j], roster[i]];
-  }
-  return roster;
 }
 
 export function simultaneousCap(kind: ZombieKind, wave: number, players: number) {

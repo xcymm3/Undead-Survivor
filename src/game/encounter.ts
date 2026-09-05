@@ -18,8 +18,12 @@ export interface Zombie extends SpawnPosition {
 export const PRACTICE_POSITIONS: Position[] = [{ x: -5.8, z: -9.5 }, { x: 0.15, z: -22 }, { x: 5.4, z: -21 }, { x: -1, z: -31 }];
 
 export function waveSettings(wave: number) {
-  const index = Math.max(0, Math.floor(wave) - 1);
-  return { count: WAVES.firstCount + index * WAVES.countGrowth, speed: WAVES.firstSpeed + index * WAVES.speedGrowth,
+  const normalized = Math.max(1, Math.floor(wave)), index = normalized - 1;
+  const count = normalized <= 6 ? WAVES.firstCount + index * 6
+    : normalized <= 8 ? 39 + (normalized - 6) * 5
+      : normalized <= 11 ? 49 + (normalized - 8) * 4
+        : 61 + (normalized - 11) * 3;
+  return { count, speed: Math.min(WAVES.maxSpeed, WAVES.firstSpeed + index * WAVES.speedGrowth),
     spawnRate: Math.min(SURVIVAL.maxSpawnRate, WAVES.spawnRate + index * WAVES.spawnGrowth) };
 }
 
@@ -170,8 +174,11 @@ export class Encounter {
   }
 
   private damage(target: Pawn | null) {
+    const lastDamageAt = target?.lastDamageAt ?? this.lastDamageAt;
+    if (this.elapsed - lastDamageAt < ATTACK.damageProtection - 1e-9) return false;
     if (target) { target.health = Math.max(0, target.health - ATTACK.damage); target.lastDamageAt = this.elapsed; }
     else { this.health = Math.max(0, this.health - ATTACK.damage); this.lastDamageAt = this.elapsed; }
+    return true;
   }
 
   private attack(zombie: Zombie, target: Pawn | undefined, targets: Map<number, Pawn>, step: number) {
@@ -261,7 +268,9 @@ export class Encounter {
         continue;
       }
       if (this.waveQueue.length === 0 && this.alive === 0) {
-        this.wavesCleared = this.wave; this.intermission = WAVES.rest; this.spawnCredit = 0; continue;
+        this.wavesCleared = this.wave; this.intermission = WAVES.rest; this.spawnCredit = 0;
+        if (!this.combatants) { this.health = PLAYER.health; this.lastDamageAt = -Infinity; }
+        continue;
       }
       if (this.waveQueue.length === 0) continue;
       this.spawnCredit = Math.min(1, this.spawnCredit + step * this.pressure.spawnRate);

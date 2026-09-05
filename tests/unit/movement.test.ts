@@ -82,6 +82,7 @@ describe('移动目标追击与拥挤避让', () => {
     field.sync(encounter);
     field.getMatrixAt(0, matrix);
     const forward = new Vector3(0, 0, 1).transformDirection(matrix);
+    forward.y = 0; forward.normalize();
     const current = encounter.zombies[0];
     const displacement = new Vector3(current.x - before.x, 0, current.z - before.z).normalize();
     expect(forward.dot(displacement)).toBeCloseTo(1, 7);

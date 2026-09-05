@@ -21,13 +21,15 @@ describe('练习与正式模式', () => {
     expect(encounter.zombies[1].health).toBe(100);
   });
 
-  it('每波数量固定，等待不会升波；逐波数量与移速递增', () => {
+  it('波次数量分段增长，基础移速和刷新率封顶', () => {
     expect(waveSettings(1)).toEqual({ count: 9, speed: 1.4, spawnRate: 1 });
-    for (let wave = 2; wave <= 100; wave++) {
-      expect(waveSettings(wave).count).toBeGreaterThan(waveSettings(wave - 1).count);
-      expect(waveSettings(wave).speed).toBeGreaterThan(waveSettings(wave - 1).speed);
-      expect(waveSettings(wave).spawnRate).toBeLessThanOrEqual(10);
-    }
+    expect(Array.from({ length: 15 }, (_, index) => waveSettings(index + 1).count))
+      .toEqual([9, 15, 21, 27, 33, 39, 44, 49, 53, 57, 61, 64, 67, 70, 73]);
+    expect(waveSettings(8)).toMatchObject({ count: 49, speed: 2.45 });
+    expect(waveSettings(8).spawnRate).toBeCloseTo(1.7);
+    expect(waveSettings(9).speed).toBe(2.5);
+    expect(waveSettings(11).spawnRate).toBe(2);
+    expect(waveSettings(100)).toEqual({ count: 328, speed: 2.5, spawnRate: 2 });
     const e = new Encounter(); e.reset('survival', 'hard');
     e.update(60, farSpawn); expect(e.waveSpawned).toBe(9); expect(e.totalSpawned).toBe(9);
     expect(e.wave).toBe(1); expect(e.wavesCleared).toBe(0);
@@ -103,6 +105,24 @@ describe('练习与正式模式', () => {
     expect(values).toEqual([60, 60, 60]);
   });
 
+  it('玩家受伤后获得0.3秒保护且清波时恢复满血', () => {
+    const encounter = new Encounter(); encounter.reset('survival', 'easy');
+    encounter.waveQueue = []; encounter.waveSpawned = encounter.pressure.count;
+    encounter.zombies = [
+      { id: 98, x: 0, z: 7.75, kind: 'normal', health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0 },
+      { id: 99, x: .1, z: 7.75, kind: 'normal', health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0 },
+    ];
+    encounter.update(ATTACK.windup, () => null);
+    expect(encounter.health).toBe(90);
+    expect(encounter.lastDamageAt).toBeCloseTo(ATTACK.windup);
+    encounter.update(ATTACK.damageProtection - .01, () => null);
+    expect(encounter.health).toBe(90);
+    for (const zombie of encounter.zombies) encounter.hit(zombie.id, true, 1000);
+    encounter.update(.9, () => null);
+    expect(encounter).toMatchObject({ health: 100, wavesCleared: 1 });
+    expect(encounter.intermission).toBeGreaterThan(4);
+  });
+
   it('击杀的僵尸不会造成失败，尸体被回收，重开清空全部状态', () => {
     const encounter = new Encounter(); encounter.reset('survival', 'hard');
     encounter.zombies.push({ id: 99, x: 0, z: 0, kind: 'normal', health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0 });
@@ -124,7 +144,7 @@ describe('练习与正式模式', () => {
     const encounter = new Encounter(); encounter.reset('survival', 'hard'); encounter.wave = 100;
     encounter.update(40, () => ({ x: 10000, z: -10000 }));
     expect(encounter.zombies.length).toBeLessThanOrEqual(SURVIVAL.maxZombies);
-    expect(encounter.zombies.length).toBeGreaterThan(100);
+    expect(encounter.zombies.length).toBeGreaterThanOrEqual(79);
     expect(encounter.zombieCounts.shield).toBeLessThanOrEqual(4);
     expect(encounter.zombieCounts.berserker).toBeLessThanOrEqual(4);
     expect(encounter.zombieCounts.giant).toBeLessThanOrEqual(1);

@@ -120,10 +120,20 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
     if (animated) moving.push(mesh); return mesh;
   };
   if (definition.id === 'axe') {
-    const handle = part('Handle', [.075, .075, .88], [.08, -.04, -.38], 0x765039, true);
-    handle.rotation.x = -.13;
-    part('AxeHead', [.34, .24, .085], [.08, .015, -.80], 0x7e8c8c, true);
-    part('AxeEdge', [.37, .15, .035], [.08, .005, -.855], 0xc0cac5, true);
+    const handle = part('FiberglassHandle', [.065, .07, .92], [.12, -.10, -.36], 0xb93d2e);
+    handle.rotation.x = -.10;
+    part('Grip', [.082, .088, .34], [.12, -.13, .01], 0x292f30);
+    part('HeadSocket', [.20, .16, .15], [.12, .015, -.80], 0x515b5d);
+    const bladeShape = new THREE.Shape();
+    bladeShape.moveTo(.04, .13); bladeShape.lineTo(-.22, .16); bladeShape.lineTo(-.43, .07);
+    bladeShape.lineTo(-.46, -.13); bladeShape.lineTo(-.19, -.16); bladeShape.lineTo(.04, -.08); bladeShape.closePath();
+    const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(bladeShape, { depth: .075, bevelEnabled: false }),
+      new THREE.MeshStandardMaterial({ color: 0xaeb9b6, roughness: .48, metalness: .42, flatShading: true }));
+    blade.geometry.translate(0, 0, -.0375); blade.position.set(.04, .02, -.84); blade.name = 'FireAxeBlade'; model.add(blade);
+    const pick = new THREE.Mesh(new THREE.ConeGeometry(.075, .42, 4),
+      new THREE.MeshStandardMaterial({ color: 0x7c8988, roughness: .52, metalness: .36, flatShading: true }));
+    pick.name = 'FireAxePick'; pick.rotation.z = -Math.PI / 2; pick.position.set(.34, .02, -.82); model.add(pick);
+    part('SafetyCollar', [.11, .09, .10], [.12, -.01, -.69], 0xd3a629);
   } else if (definition.id === 'flamethrower') {
     part('Body', [.32, .24, .55], [.05, -.04, -.28], 0x3b4b45);
     tube('Nozzle', .055, .62, [.04, .03, -.70], 0x596967, true);
@@ -134,10 +144,21 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
   } else if (definition.id === 'auto-shotgun') {
     part('Receiver', [.28, .24, .48], [.05, -.02, -.27], 0x344248);
     tube('Barrel', .045, .72, [.05, .04, -.73], 0x263238);
-    tube('TubeMagazine', .055, .62, [.05, -.10, -.68], 0x52605d);
-    part('BoxMagazine', [.18, .32, .20], [.06, -.23, -.24], 0x2a3538, true);
+    tube('GasTube', .052, .58, [.05, -.08, -.66], 0x52605d);
+    part('Handguard', [.25, .19, .38], [.05, -.055, -.58], 0x47534e);
+    const drum = new THREE.Group(); drum.name = 'DrumMagazine'; drum.position.set(.05, -.24, -.28); model.add(drum); moving.push(drum);
+    const drumShell = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .17, 12),
+      new THREE.MeshStandardMaterial({ color: 0x202a2d, roughness: .68, metalness: .22, flatShading: true }));
+    drumShell.rotation.z = Math.PI / 2; drumShell.name = 'DrumBody'; drum.add(drumShell);
+    const drumHub = new THREE.Mesh(new THREE.CylinderGeometry(.065, .065, .185, 10),
+      new THREE.MeshStandardMaterial({ color: 0x667174, roughness: .50, metalness: .35, flatShading: true }));
+    drumHub.rotation.z = Math.PI / 2; drumHub.name = 'DrumHub'; drum.add(drumHub);
+    const feedTower = new THREE.Mesh(new THREE.BoxGeometry(.13, .14, .11),
+      new THREE.MeshStandardMaterial({ color: 0x2c373a, roughness: .62, metalness: .28, flatShading: true }));
+    feedTower.position.y = .15; feedTower.name = 'FeedTower'; drum.add(feedTower);
     part('Bolt', [.09, .08, .18], [.19, .03, -.25], 0x9aa19a, true);
-    part('Stock', [.24, .28, .38], [.05, -.06, .16], 0x58614d);
+    part('PistolGrip', [.11, .28, .14], [.05, -.22, -.02], 0x252f31);
+    part('Stock', [.24, .28, .38], [.05, -.06, .16], 0x3a4644);
     part('FrontSight', [.035, .12, .035], [.05, .13, -.94], 0xd0c58f);
     part('RearSight', [.12, .08, .035], [.05, .12, -.12], 0x87918a);
   } else {
@@ -151,6 +172,7 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
     part('FrontSight', [.035, .14, .035], [.04, .16, -1.02], 0xd0c58f);
     part('RearSight', [.14, .09, .035], [.04, .145, -.16], 0x87918a);
   }
+  if (definition.id === 'auto-shotgun') holder.scale.setScalar(.72);
   moving.unshift(model);
   const rests = moving.map(node => ({ node, position: node.position.clone(), quaternion: node.quaternion.clone() }));
   let lastKind: WeaponAnimation = 'idle', lastProgress = 1;
@@ -159,14 +181,28 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
     lastKind = kind; lastProgress = progress; restore();
     const p = THREE.MathUtils.clamp(progress, 0, 1), pulse = Math.sin(Math.PI * p);
     if (kind === 'fire') {
-      if (definition.id === 'axe') model.rotation.set(-pulse * 1.05, pulse * .25, pulse * .38);
+      if (definition.id === 'axe') {
+        const windup = new THREE.Euler(.32, -.28, -.48), chop = new THREE.Euler(-1.28, .18, .72);
+        if (p < .22) {
+          const t = smooth(p / .22); model.rotation.set(windup.x * t, windup.y * t, windup.z * t);
+          model.position.set(.07 * t, .02 * t, .08 * t);
+        } else if (p < .58) {
+          const t = smooth((p - .22) / .36);
+          model.rotation.set(THREE.MathUtils.lerp(windup.x, chop.x, t), THREE.MathUtils.lerp(windup.y, chop.y, t), THREE.MathUtils.lerp(windup.z, chop.z, t));
+          model.position.set(THREE.MathUtils.lerp(.07, -.13, t), THREE.MathUtils.lerp(.02, -.17, t), THREE.MathUtils.lerp(.08, -.14, t));
+        } else {
+          const t = smooth((p - .58) / .42), recover = 1 - t;
+          model.rotation.set(chop.x * recover, chop.y * recover, chop.z * recover);
+          model.position.set(-.13 * recover, -.17 * recover, -.14 * recover);
+        }
+      }
       else {
         const bolt = model.getObjectByName(definition.id === 'auto-shotgun' ? 'Bolt' : definition.id === 'heavy-machine-gun' ? 'ChargingHandle' : 'Nozzle');
         if (bolt) bolt.position.z += pulse * .10;
         model.position.z = pulse * .045;
       }
     } else if (kind === 'reload') {
-      const magazine = model.getObjectByName(definition.id === 'flamethrower' ? 'FuelTankA' : definition.id === 'auto-shotgun' ? 'BoxMagazine' : 'AmmoBox');
+      const magazine = model.getObjectByName(definition.id === 'flamethrower' ? 'FuelTankA' : definition.id === 'auto-shotgun' ? 'DrumMagazine' : 'AmmoBox');
       if (magazine) {
         const out = p < .45 ? Math.sin(Math.PI * p / .9) : Math.sin(Math.PI * (1 - p) / 1.1);
         magazine.position.y -= Math.max(0, out) * .38;

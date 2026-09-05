@@ -97,9 +97,14 @@ export class ZombieField extends THREE.InstancedMesh {
         && (zombie.attackTime ?? 0) < ENEMY_RULES.shield.exposeDuration;
       const downDuration = encounter.mode === 'practice' ? 3 : 0.85;
       const fall = zombie.health === 0 ? Math.min(Math.PI / 2, (downDuration - zombie.downTime) * 5) : 0;
-      this.root.position.set(zombie.x, moving ? Math.abs(stride) * 0.025 : 0, zombie.z);
+      this.root.position.set(zombie.x, moving ? Math.abs(stride) * 0.05 : 0, zombie.z);
       const goal = encounter.player;
       this.root.rotation.set(-fall, encounter.mode === 'survival' ? zombie.heading ?? Math.atan2(goal.x - zombie.x, goal.z - zombie.z) : 0, 0, 'YXZ');
+      if (moving) {
+        this.root.rotation.x += .045;
+        this.root.position.x += Math.cos(this.root.rotation.y) * stride * .025;
+        this.root.position.z -= Math.sin(this.root.rotation.y) * stride * .025;
+      }
       if (culprit || zombie.attacking) {
         this.root.rotation.y = Math.atan2(goal.x - zombie.x, goal.z - zombie.z);
         this.root.rotation.x += lunge * 0.16;
@@ -115,9 +120,13 @@ export class ZombieField extends THREE.InstancedMesh {
       PARTS.forEach((part, partIndex) => {
         this.part.position.set(...part.position);
         if (part.shield && shieldExposed) { this.part.position.y -= .85; this.part.position.z -= .18; }
-        this.part.position.z += stride * (part.limb ?? 0) * 0.12;
+        const limb = part.limb ?? 0, leg = Math.abs(limb) >= 1, arm = limb !== 0 && !leg;
+        if (leg) {
+          this.part.position.z += stride * limb * .20;
+          this.part.position.y += Math.max(0, stride * Math.sign(limb)) * .075;
+        } else if (arm) this.part.position.z -= stride * Math.sign(limb) * .07;
         if (part.limb && Math.abs(part.limb) < 1) { this.part.position.z += lunge * 0.28; this.part.position.y += Math.sin(lunge * Math.PI) * 0.16; }
-        this.part.rotation.set(stride * (part.limb ?? 0) * 0.14, 0, 0);
+        this.part.rotation.set(leg ? stride * limb * .27 : arm ? -stride * Math.sign(limb) * .16 : 0, 0, 0);
         this.part.scale.set(...part.size);
         if (part.kind && (part.kind !== zombie.kind || (part.armor && zombie.armorHealth <= 0))) this.part.scale.setScalar(0);
         this.part.updateMatrix();

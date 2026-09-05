@@ -33,4 +33,14 @@ describe('四款自制低多边形武器', () => {
     }
     rig.dispose();
   });
+
+  it('消防斧具有单侧斧刃和背部尖镐，自动霰弹枪使用鼓式弹匣', () => {
+    const axe = prepareProceduralWeapon(WEAPONS.find(weapon => weapon.id === 'axe')!);
+    expect(axe.model.getObjectByName('FireAxeBlade')).toBeTruthy();
+    expect(axe.model.getObjectByName('FireAxePick')).toBeTruthy();
+    const shotgun = prepareProceduralWeapon(WEAPONS.find(weapon => weapon.id === 'auto-shotgun')!);
+    expect(shotgun.model.getObjectByName('DrumMagazine')).toBeTruthy();
+    expect(shotgun.model.getObjectByName('BoxMagazine')).toBeFalsy();
+    axe.dispose(); shotgun.dispose();
+  });
 });
