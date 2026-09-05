@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG, FIXED_DIFFICULTY } from './config';
-import type { GameMode, GamePhase, GameSnapshot, RunResult } from './config';
+import type { GameMode, GamePhase, GameSnapshot, RenderQuality, RunResult } from './config';
 import { weaponQuaternion } from './aim';
 import { GameAudio } from './audio';
 import { Arsenal } from './arsenal';
@@ -73,6 +73,10 @@ export class Game {
   private fpsTime = 0;
   private fps = 60;
   private pixelated = false;
+  private renderQuality: RenderQuality = 'native';
+  private renderWidth = 1;
+  private renderHeight = 1;
+  private gpu = '未识别';
   private disposed = false;
   private width = 1;
   private height = 1;
@@ -80,7 +84,14 @@ export class Game {
   private lastShot: { muzzle: number[]; direction: number[]; aimPoint: number[]; impact: number[]; hitTarget: number | null } | null = null;
 
   constructor(private host: HTMLDivElement, private callbacks: GameCallbacks) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    try {
+      const saved = localStorage.getItem('undead-survivor.render-quality');
+      if (saved === 'native' || saved === 'balanced' || saved === 'performance') this.renderQuality = saved;
+    } catch { /* 禁用存储时沿用原生清晰度。 */ }
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const gl = this.renderer.getContext();
+    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+    this.gpu = String(debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).slice(0, 100);
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.autoUpdate = false;
@@ -135,10 +146,12 @@ export class Game {
     this.height = Math.max(1, this.host.clientHeight);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
-    // 最高绘制到 1440p；4K 客户端不再把 1080p 画面放大两倍，同时限制超高 DPI 的显存开销。
-    const ratio = Math.min(devicePixelRatio, 1.5, 2560 / this.width, 1440 / this.height);
+    const limits = this.renderQuality === 'native' ? [3840, 2160, 2] : this.renderQuality === 'balanced' ? [2560, 1440, 1.5] : [1920, 1080, 1];
+    const ratio = Math.min(devicePixelRatio, limits[2], limits[0] / this.width, limits[1] / this.height);
     this.renderer.setPixelRatio(ratio * (this.pixelated ? 0.68 : 1));
     this.renderer.setSize(this.width, this.height);
+    const buffer = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.renderWidth = Math.round(buffer.x); this.renderHeight = Math.round(buffer.y);
     this.dirty = true;
     this.updateCrosshair();
   };
@@ -364,6 +377,11 @@ export class Game {
   setSound(enabled: boolean) { this.audio.enabled = enabled; if (enabled) this.audio.unlock(); this.publish(); }
   setVolume(volume: number) { this.audio.volume = volume; this.audio.unlock(); this.publish(); }
   setPixelated(enabled: boolean) { this.pixelated = enabled; this.resize(); this.publish(); }
+  setRenderQuality(quality: RenderQuality) {
+    this.renderQuality = quality;
+    try { localStorage.setItem('undead-survivor.render-quality', quality); } catch { /* 设置仍对当前运行有效。 */ }
+    this.resize(); this.publish();
+  }
 
   private activeSurfaces() {
     return [...this.world.surfaces, this.zombieField];
@@ -622,7 +640,7 @@ export class Game {
 
   private publish() {
     const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0 } : undefined;
-    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: this.firearm.ammo, reloading: this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.pixelated, renderQuality: this.renderQuality, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, reloadQueued: this.arsenal.reloadQueued, inventory: this.arsenal.guns.map(gun => gun.ammo) });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -657,6 +675,7 @@ export class Game {
       breachElapsed: this.breachSequence.elapsed, cameraPosition: this.camera.position.toArray(), cameraFov: this.camera.fov,
       obstacles: this.world.obstacles, blockedZombies: this.encounter.zombies.filter(z => z.health > 0 && !this.navigation.clear(z, z)).map(z => z.id),
       weaponIndex: this.arsenal.active, requestedWeapon: this.arsenal.requested, switching: this.arsenal.switching, switchProgress: this.arsenal.switchProgress, inventory: this.arsenal.guns.map(gun => gun.ammo), weaponAnimation: this.weapon.diagnostics(),
+      renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), quality: this.renderQuality, gpu: this.gpu },
       reload: { progress: this.firearm.reloadProgress, remaining: this.firearm.reloadRemaining, empty: this.firearm.reloadEmpty, cycle: this.firearm.animationProgress },
       targets: this.encounter.zombies.map(z => ({ id: z.id, kind: z.kind, maxHealth: z.maxHealth, armorHealth: z.armorHealth, bodyHealth: z.health - z.armorHealth, spawnZone: z.spawnZone, health: z.health, x: z.x, z: z.z, bornAt: z.bornAt, avoidance: z.avoidance ?? 0, heading: z.heading, attacking: z.attacking ?? false, attackTime: z.attackTime ?? 0, head: project(new THREE.Vector3(z.x, 1.83, z.z)), chest: project(new THREE.Vector3(z.x, 1.25, z.z + 0.2)) })),
     };

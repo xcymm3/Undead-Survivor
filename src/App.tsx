@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Game } from './game/Game';
 import { WEAPONS } from './game/weapons';
 import { DIFFICULTIES, FIXED_DIFFICULTY } from './game/config';
-import type { GameMode, GameSnapshot } from './game/config';
+import type { GameMode, GameSnapshot, RenderQuality } from './game/config';
 import { formatDuration, LeaderboardStore, personalRecord } from './game/leaderboard';
 import type { PersonalRecord } from './game/leaderboard';
 import { BreachOverlay, DeploymentPanel, LeaderboardTable, ResultPanel } from './ui/SessionPanels';
 import { MultiplayerPanel } from './ui/MultiplayerPanel';
 
-const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false };
+const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false, renderQuality: 'native', renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
 
 function Icon({ name, size = 18 }: { name: 'tower' | 'aim' | 'sound' | 'mute' | 'settings' | 'expand' | 'pause' | 'arrow' | 'close'; size?: number }) {
   const paths = {
@@ -189,6 +189,7 @@ export function App() {
       <div className="view-limits"><Icon name="aim" /><p>水平 360°<span>垂直 ±85°</span><small>WASD 移动，空格跳跃。点击捕获鼠标，ESC 暂停。</small></p></div>
       <label className="toggle-row"><span>游戏声音<small>射击、护甲、死亡与低音量背景音乐</small></span><input type="checkbox" checked={state.sound} onChange={event => game.current?.setSound(event.target.checked)} /><i /></label>
       <div className="volume-control"><label htmlFor="volume">总音量 <b>{Math.round(state.volume * 100)}%{!state.sound && ' · 已静音'}</b></label><input id="volume" type="range" min="0" max="100" step="1" value={Math.round(state.volume * 100)} onChange={event => game.current?.setVolume(Number(event.target.value) / 100)} /><small>自动保存音量与静音设置</small></div>
+      <label className="quality-row"><span>渲染清晰度<small>{state.renderResolution.width} × {state.renderResolution.height} · {state.fps} FPS<br />GPU：{state.renderResolution.gpu}{/SwiftShader|llvmpipe|software/i.test(state.renderResolution.gpu) && <strong>检测到软件渲染，请开启显卡硬件加速。</strong>}</small></span><select aria-label="渲染清晰度" value={state.renderQuality} onChange={event => game.current?.setRenderQuality(event.target.value as RenderQuality)}><option value="native">原生（最高 4K）</option><option value="balanced">平衡（最高 1440p）</option><option value="performance">性能（最高 1080p）</option></select></label>
       <label className="toggle-row"><span>粗颗粒像素<small>降低渲染分辨率，保留清晰的界面</small></span><input type="checkbox" checked={state.pixelated} onChange={event => game.current?.setPixelated(event.target.checked)} /><i /></label>
       <div className="settings-controls"><span><kbd>左键</kbd> 射击</span><span><kbd>R</kbd> 换弹</span><span><kbd>M</kbd> 静音</span><span><kbd>ESC</kbd> 暂停</span></div>
       <button className="start-button dialog-done" onClick={closeSettings}>返回哨站 <Icon name="arrow" /></button>
