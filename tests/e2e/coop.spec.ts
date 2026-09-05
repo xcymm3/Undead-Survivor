@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Room, SteamEvent, SteamStatus } from '../../src/multiplayer/types';
+import type { Room, SteamEvent, SteamStatus, WorldState } from '../../src/multiplayer/types';
 import { capture, lookAt, snapshot } from './controls';
 import { LEADERBOARD_KEY } from '../../src/game/leaderboard';
 import { WEAPONS } from '../../src/game/weapons';
@@ -22,7 +22,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
         if (closing) return;
         if (method === 'status') return status(i);
         if (method === 'create') { room = { id: '999', name: String(value), owner: ids[i], members: [{ id: ids[i], name: status(i).name }], playing: false }; await publish(); return room; }
-        if (method === 'search') return room && !room.playing && room.members.length < 2 ? [room] : [];
+        if (method === 'search') return room && !room.playing && room.members.length < 4 ? [room] : [];
         if (method === 'join') { room!.members.push({ id: ids[i], name: status(i).name }); await publish(); return room; }
         if (method === 'start') {
           room!.playing = true;
@@ -51,12 +51,12 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     }
     const [host, guest] = pages;
     await host.getByRole('button', { name: '创建房间' }).click();
-    await expect(host.getByRole('button', { name: '开始双人游戏' })).toBeDisabled();
+    await expect(host.getByRole('button', { name: '开始多人游戏' })).toBeDisabled();
     await guest.getByRole('button', { name: '搜索房间' }).click();
     await guest.getByRole('button', { name: '加入房间', exact: true }).click();
-    await expect(host.getByText('两人已到齐，可以开始。')).toBeVisible();
+    await expect(host.getByText('已有 2 人，可以开始或继续等待。')).toBeVisible();
     await host.screenshot({ path: 'test-results/coop-room.png' });
-    await host.getByRole('button', { name: '开始双人游戏' }).click();
+    await host.getByRole('button', { name: '开始多人游戏' }).click();
     await expect.poll(async () => (await snapshot(guest)).coop?.players.length, { timeout: 15000 }).toBe(2);
     async function control(page: Page) {
       // 两个测试客户端共用一个无界面浏览器，先释放另一页的鼠标锁，避免同时争抢。
@@ -129,7 +129,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     expect((await snapshot(guest)).weaponAnimation.model).toBe(WEAPONS[2].model);
     await control(guest); await lookAt(guest, 2, 1.7, -40); await guest.keyboard.down('w');
     await expect.poll(async () => (await snapshot(guest)).health, { timeout: 15000 }).toBe(0); await guest.keyboard.up('w');
-    await expect(guest.getByText('你已阵亡 · 正在观战队友')).toBeVisible();
+    await expect(guest.getByText(/你已阵亡 · 正在观战/)).toBeVisible();
     expect((await snapshot(host)).health).toBeGreaterThan(0);
     expect((await snapshot(guest)).phase).toBe('playing');
     await control(host); await host.keyboard.press('2');
@@ -165,4 +165,44 @@ test('浏览器多人入口说明桌面版要求，并可返回单人首页', as
   await expect(page.getByText('请在桌面版中使用 Steam 联机', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '返回首页', exact: true }).click();
   await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+});
+
+test('四人快照支持左键循环观战并在清波后全员复活', async ({ page }) => {
+  const members = [{ id: '111', name: '房主' }, { id: '222', name: '本机' }, { id: '333', name: '队员乙' }, { id: '444', name: '队员丙' }];
+  await page.addInitScript(({ members }) => {
+    localStorage.setItem('undead-survivor.graphics', JSON.stringify({ resolutionScale: 0.5, antiAliasing: 'off', shadows: 'off', effects: 'low', viewDistance: 'near', frameLimit: 60, pixelated: false }));
+    const listeners = new Set<(event: SteamEvent) => void>();
+    (window as any).__testSteamEvent = (event: SteamEvent) => listeners.forEach(listener => listener(event));
+    const room = { id: 'four', name: '四人小队', owner: '111', members, playing: true };
+    window.steamCoop = { status: async () => ({ available: true, id: '222', name: '本机', appId: 480, message: '测试', room }), create: async () => room,
+      search: async () => [], join: async () => room, leave: async () => {}, start: async () => {}, send: () => {},
+      onEvent: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; } };
+  }, { members });
+  await page.goto('/'); await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+  await page.evaluate(members => (window as any).__testSteamEvent({ type: 'start', match: { session: 'four-player', host: '111', local: '222', members } }), members);
+  await capture(page);
+  const players = [
+    { ...members[0], x: -8, z: 2, height: 0, yaw: .1, pitch: .05, health: 100, lastDamageAt: -1e6, weapon: 0, shots: 2, ammo: 28, reloading: false, reloadProgress: 1 },
+    { ...members[1], x: 3, z: 9, height: 0, yaw: 0, pitch: 0, health: 0, lastDamageAt: 1, weapon: 2, shots: 0, ammo: 12, reloading: false, reloadProgress: 1 },
+    { ...members[2], x: 5, z: -3, height: 0, yaw: 1.1, pitch: -.1, health: 70, lastDamageAt: .5, weapon: 1, shots: 4, ammo: 46, reloading: false, reloadProgress: 1 },
+    { ...members[3], x: 10, z: -12, height: 0, yaw: -1.2, pitch: .2, health: 40, lastDamageAt: .7, weapon: 4, shots: 1, ammo: 5, reloading: false, reloadProgress: 1 },
+  ];
+  const world: WorldState = { type: 'world', seq: 1, inputs: members.slice(1).map(member => ({ id: member.id, ack: 0, keys: [] })), players,
+    zombies: [], wave: 1, wavesCleared: 0, waveSpawned: 0, totalSpawned: 0, intermission: 0, elapsed: 1, kills: 0, failed: false };
+  await page.evaluate(world => (window as any).__testSteamEvent({ type: 'packet', from: '111', data: world }), world);
+  await expect.poll(async () => (await snapshot(page)).health).toBe(0);
+  await expect.poll(async () => (await snapshot(page)).coop?.spectating).toBe('111');
+  await page.getByTestId('game-canvas').dispatchEvent('pointerdown', { button: 0 });
+  await expect.poll(async () => (await snapshot(page)).coop?.spectating).toBe('333');
+  expect((await snapshot(page)).cameraPosition[0]).toBeCloseTo(5, 1);
+  expect((await snapshot(page)).cameraPosition[2]).toBeCloseTo(-3, 1);
+  await page.getByTestId('game-canvas').dispatchEvent('pointerdown', { button: 0 });
+  await expect.poll(async () => (await snapshot(page)).coop?.spectating).toBe('444');
+  const revivedPlayers = players.map((player, index) => ({ ...player, x: index % 2 ? 3 : -3, z: index < 2 ? 9 : 6.5, height: 0, health: 100, lastDamageAt: -1e6 }));
+  const revived: WorldState = { ...world, seq: 2, players: revivedPlayers, waveSpawned: 9, totalSpawned: 9, wavesCleared: 1, intermission: 5, elapsed: 10, kills: 9 };
+  await page.evaluate(world => (window as any).__testSteamEvent({ type: 'packet', from: '111', data: world }), revived);
+  await expect.poll(async () => (await snapshot(page)).health).toBe(100);
+  await expect.poll(async () => (await snapshot(page)).coop?.spectating).toBeNull();
+  expect((await snapshot(page)).player).toMatchObject({ x: 3, z: 9 });
+  expect((await snapshot(page)).weaponVisible).toBe(true);
 });

@@ -17,7 +17,7 @@ export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, onMultip
       {mode === 'survival' ? <><span className="practice-note">困难难度 · 波次生存</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。<br />每 {ARMOR_SPAWNS.normalPerCone} 普 → 1 路障；每 {ARMOR_SPAWNS.conesPerBucket} 路障 → 1 铁桶。<br /><strong>清完一波休整 5 秒。空格跳河，落水立即失败。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />靶子不攻击；落水仍会失败，不计入排行榜。</p></>}
     </div>
     <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}<small>{mode === 'practice' ? 'ENTER THE RANGE' : 'HOLD THE LINE'}</small></span><span aria-hidden="true">→</span></button>
-    <button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>双人生存 / STEAM P2P →</span></button>
+    <button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>2～4 人生存 / STEAM P2P →</span></button>
     <button className="leaderboard-link" onClick={onLeaderboard}>查看排行榜 <span>本机 TOP 10 ↗</span></button>
   </div>;
 }

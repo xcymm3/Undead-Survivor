@@ -1,14 +1,14 @@
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { deflateRawSync, inflateRawSync } = require('node:zlib');
-const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v3';
+const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v4';
 const UNRELIABLE_LIMIT = 1150, SNAPSHOT_CHUNK = 690;
 const idOf = value => String(value.steamId64);
 
 class SteamRooms {
   constructor(client, native, emit) {
     this.client = client; this.native = native; this.emit = emit; this.id = idOf(client.localplayer.getSteamId());
-    this.name = client.localplayer.getName().slice(0, 128); this.lobby = null; this.match = null; this.pending = null; this.lastPeer = 0;
+    this.name = client.localplayer.getName().slice(0, 128); this.lobby = null; this.match = null; this.pending = null; this.ready = new Set(); this.lastPeer = 0;
     this.snapshots = new Map();
     this.handles = [client.callback.register(6, ({ remote }) => {
       if (this.memberIds().includes(String(remote))) client.networking.acceptP2PSession(remote);
@@ -19,7 +19,7 @@ class SteamRooms {
   }
   memberIds() { return this.lobby ? this.lobby.getMembers().map(idOf) : []; }
   room(lobby = this.lobby) {
-    return lobby ? { id: String(lobby.id), name: lobby.getData('name') || '双人生存', owner: idOf(lobby.getOwner()),
+    return lobby ? { id: String(lobby.id), name: lobby.getData('name') || '小队生存', owner: idOf(lobby.getOwner()),
       members: lobby.getMembers().map(m => ({ id: idOf(m), name: idOf(m) === this.id ? this.name : `队友 ${idOf(m).slice(-4)}` })),
       playing: lobby.getData('state') !== 'waiting' } : null;
   }
@@ -29,7 +29,7 @@ class SteamRooms {
   async exclusive(action) { if (this.busy) throw Error('正在处理房间请求，请稍候。'); this.busy = true; try { return await action(); } finally { this.busy = false; } }
   create(name) { return this.exclusive(async () => {
     if (this.lobby) throw Error('请先离开当前房间。');
-    const lobby = await this.client.matchmaking.createLobby(2, 2);
+    const lobby = await this.client.matchmaking.createLobby(2, 4);
     if (!lobby.mergeFullData({ game: GAME, protocol: VERSION, name: String(name || `${this.name}的房间`).slice(0, 40), state: 'waiting' })) {
       lobby.leave(); throw Error('房间信息设置失败。');
     }
@@ -40,14 +40,14 @@ class SteamRooms {
     this.native.filter(GAME, VERSION);
     const rooms = await this.client.matchmaking.getLobbies();
     // 搜索结果只有公开元数据与人数；Steam 要求加入后才能查询成员 ID 和房主。
-    return rooms.filter(l => this.compatible(l) && l.getData('state') === 'waiting' && Number(l.getMemberCount()) < 2)
-      .map(l => ({ id: String(l.id), name: l.getData('name') || '双人生存', owner: '', members: [], memberCount: Number(l.getMemberCount()), playing: false }));
+    return rooms.filter(l => this.compatible(l) && l.getData('state') === 'waiting' && Number(l.getMemberCount()) < 4)
+      .map(l => ({ id: String(l.id), name: l.getData('name') || '小队生存', owner: '', members: [], memberCount: Number(l.getMemberCount()), playing: false }));
   }); }
   join(id) { return this.exclusive(async () => {
     if (this.lobby) throw Error('请先离开当前房间。');
     if (typeof id !== 'string' || !/^\d{1,20}$/.test(id)) throw Error('房间号格式不正确。');
     const lobby = await this.client.matchmaking.joinLobby(BigInt(id));
-    if (!this.compatible(lobby) || lobby.getData('state') !== 'waiting' || Number(lobby.getMemberCount()) > 2) {
+    if (!this.compatible(lobby) || lobby.getData('state') !== 'waiting' || Number(lobby.getMemberCount()) > 4) {
       lobby.leave(); throw Error('房间不兼容、已满或已经开始。');
     }
     this.lobby = lobby; this.lastPeer = Date.now(); this.publish(); return this.room();
@@ -61,14 +61,15 @@ class SteamRooms {
         lobby.leave();
       }
     } finally {
-      this.lobby = null; this.match = null; this.pending = null; this.snapshots.clear(); this.publish();
+      this.lobby = null; this.match = null; this.pending = null; this.ready.clear(); this.snapshots.clear(); this.publish();
     }
   }
   abort(message) { try { this.leave(); } catch { /* SDK 不可用时以本地清理为准。 */ } this.emit({ type: 'left', message }); }
   start() {
     const room = this.room();
-    if (!room || room.owner !== this.id || room.members.length !== 2 || this.match || this.pending) throw Error('需要两名玩家在房间内，由房主开始。');
+    if (!room || room.owner !== this.id || room.members.length < 2 || room.members.length > 4 || this.match || this.pending) throw Error('需要 2～4 名玩家在房间内，由房主开始。');
     this.pending = { session: randomUUID(), host: this.id, members: room.members, local: this.id };
+    this.ready = new Set([this.id]);
     this.pendingAt = Date.now(); this.lastPeer = Date.now();
     this.lobby.setJoinable(false); this.lobby.setData('state', 'loading'); this.sendControl('prepare', this.pending); this.publish();
   }
@@ -120,7 +121,8 @@ class SteamRooms {
     try {
       if (!this.lobby) return;
       const ids = this.memberIds();
-      if ((this.match || this.pending) && (ids.length !== 2 || !ids.includes((this.match || this.pending).host))) return this.abort('队友已离开，联机对局结束。本次不写入单人排行。');
+      const expected = (this.match || this.pending)?.members.map(member => member.id);
+      if (expected && (ids.length !== expected.length || !expected.every(id => ids.includes(id)))) return this.abort('队友已离开，联机对局结束。本次不写入单人排行。');
       if (this.pending && Date.now() - this.pendingAt > 15000) return this.abort('等待队友连接超时，请重新创建或加入房间。');
       if (this.match && Date.now() - this.lastPeer > 15000) return this.abort('15 秒未收到队友数据，连接已中断。');
       this.sendControl('hello'); this.publish();
@@ -140,12 +142,15 @@ class SteamRooms {
         if (p.type === 'prepare' && from === idOf(this.lobby.getOwner()) && !this.match) {
           const m = p.payload;
           if (!m || typeof m.session !== 'string' || m.session.length > 80 || m.host !== from || !Array.isArray(m.members)
-            || m.members.length !== 2 || !m.members.every(v => v && typeof v.id === 'string' && typeof v.name === 'string' && v.name.length <= 128)
-            || !this.memberIds().every(id => m.members.some(v => v.id === id))) continue;
+            || m.members.length < 2 || m.members.length > 4 || !m.members.every(v => v && typeof v.id === 'string' && typeof v.name === 'string' && v.name.length <= 128)
+            || this.memberIds().length !== m.members.length || !this.memberIds().every(id => m.members.some(v => v.id === id))) continue;
           this.pending = { ...m, local: this.id }; this.pendingAt = Date.now(); this.sendControl('ready', m.session);
         } else if (p.type === 'ready' && this.pending?.host === this.id && p.payload === this.pending.session) {
-          this.match = this.pending; this.pending = null; this.lobby.setData('state', 'playing');
-          this.sendControl('go', this.match.session); this.emit({ type: 'start', match: this.match }); this.publish();
+          this.ready.add(from);
+          if (this.pending.members.every(member => this.ready.has(member.id))) {
+            this.match = this.pending; this.pending = null; this.lobby.setData('state', 'playing');
+            this.sendControl('go', this.match.session); this.emit({ type: 'start', match: this.match }); this.publish();
+          }
         } else if (p.type === 'go' && this.pending?.host === from && p.payload === this.pending.session) {
           this.match = this.pending; this.pending = null; this.emit({ type: 'start', match: this.match }); this.publish();
         } else if (p.type === 'snapshot') this.receiveSnapshot(from, p);

@@ -19,8 +19,9 @@ export interface Pawn extends Member {
 export type Command = { type: 'input'; seq: number; keys: string[]; yaw: number; pitch: number; jump: number }
   | { type: 'fire'; seq: number; yaw: number; pitch: number }
   | { type: 'reload' | 'weapon'; seq: number; index: number };
+export interface InputState { id: string; ack: number; keys: string[]; }
 export interface WorldState {
-  type: 'world'; seq: number; inputAck: number; inputKeys: string[]; players: Pawn[]; zombies: Zombie[]; wave: number; wavesCleared: number;
+  type: 'world'; seq: number; inputs: InputState[]; players: Pawn[]; zombies: Zombie[]; wave: number; wavesCleared: number;
   waveSpawned: number; totalSpawned: number; intermission: number; elapsed: number; kills: number; failed: boolean;
 }
 export const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
@@ -38,12 +39,13 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
   if (!v || typeof v !== 'object') return false;
   const s = v as WorldState;
   return s.type === 'world' && Number.isSafeInteger(s.seq) && s.seq >= 0
-    && Number.isSafeInteger(s.inputAck) && s.inputAck >= -1
-    && Array.isArray(s.inputKeys) && s.inputKeys.length <= 4 && s.inputKeys.every(k => movementKeys.includes(k))
+    && Array.isArray(s.inputs) && s.inputs.length <= members.length && new Set(s.inputs.map(input => input?.id)).size === s.inputs.length
+    && s.inputs.every(input => input && members.some(member => member.id === input.id) && Number.isSafeInteger(input.ack) && input.ack >= -1
+      && Array.isArray(input.keys) && input.keys.length <= 4 && input.keys.every(key => movementKeys.includes(key)))
     && typeof s.failed === 'boolean'
     && [s.wave, s.wavesCleared, s.waveSpawned, s.totalSpawned, s.kills].every(n => Number.isSafeInteger(n) && n >= 0)
     && s.wave >= 1 && s.wavesCleared <= s.wave && finite(s.elapsed, 1e8) && s.elapsed >= 0 && finite(s.intermission, 5) && s.intermission >= 0
-    && Array.isArray(s.players) && s.players.length === 2 && s.players.every(p => p && typeof p === 'object') && new Set(s.players.map(p => p.id)).size === 2
+    && members.length >= 2 && members.length <= 4 && Array.isArray(s.players) && s.players.length === members.length && s.players.every(p => p && typeof p === 'object') && new Set(s.players.map(p => p.id)).size === members.length
     && s.players.every(p => members.some(m => m.id === p.id) && typeof p.name === 'string' && p.name.length <= 128
       && finite(p.x, 22) && finite(p.z, 48) && finite(p.height, 3) && p.height >= 0
       && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && finite(p.health, 100) && p.health >= 0

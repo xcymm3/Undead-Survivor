@@ -1,4 +1,5 @@
 import { Arsenal } from '../game/arsenal';
+import { PLAYER } from '../game/config';
 import { Navigation } from '../game/navigation';
 import { PlayerMotion } from '../game/player';
 import type { Encounter } from '../game/encounter';
@@ -6,94 +7,124 @@ import type { Match, Pawn, Command, WorldState } from './types';
 import { validCommand, validWorld } from './types';
 
 const compact = (value: number) => Math.round(value * 1000) / 1000;
+const SPAWNS = [{ x: -3, z: 9 }, { x: 3, z: 9 }, { x: -3, z: 6.5 }, { x: 3, z: 6.5 }] as const;
 
-/** 房主接受输入并模拟队友；客户端仅预测自己移动，不提交位置、血量或伤害。 */
+interface RemoteController {
+  motion: PlayerMotion; arsenal: Arsenal; keys: Set<string>; lastInputAt: number; lastPacketAt: number;
+  commandSeq: number; inputSeq: number; jump: number; commands: Command[];
+}
+
+/** 房主模拟所有队员；每位队员拥有独立输入、武器、序号和预测校正状态。 */
 export class CoopSession {
   readonly players: Pawn[];
   readonly host: boolean;
-  readonly remoteMotion = new PlayerMotion();
-  readonly remoteArsenal = new Arsenal();
-  keys = new Set<string>();
-  lastInputAt = 0;
-  lastPacketAt = performance.now();
-  private commandSeq = -1;
-  private inputSeq = -1;
+  private controllers = new Map<string, RemoteController>();
   private worldSeq = -1;
-  private jump = 0;
   private outgoing = 0;
   private inputTimer = 0;
+  private localJump = 0;
   private worldTimer = 0;
-  private commands: Command[] = [];
   private worldReceivedAt = 0;
+  private revived = false;
   private zombieTracks = new Map<number, { fromX: number; fromZ: number; fromHeading: number; toX: number; toZ: number; toHeading: number; elapsed: number; duration: number }>();
+  lastPacketAt = performance.now();
   authoritativeKeys = new Set<string>();
   feedback: { head: boolean; killed: boolean; armorBroken: boolean }[] = [];
+
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
     private send: (data: unknown) => void) {
     this.host = match.host === match.local;
-    this.players = match.members.map((m, i) => ({ ...m, x: i ? 2 : -2, z: 9, height: 0, yaw: 0, pitch: 0,
-      health: 100, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1 }));
+    this.players = match.members.map((member, index) => ({ ...member, ...SPAWNS[index], height: 0, yaw: 0, pitch: 0,
+      health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1 }));
+    for (const player of this.remotes) this.controllers.set(player.id, {
+      motion: new PlayerMotion(), arsenal: new Arsenal(), keys: new Set(), lastInputAt: 0, lastPacketAt: performance.now(),
+      commandSeq: -1, inputSeq: -1, jump: 0, commands: [],
+    });
     if (this.host) encounter.setCombatants(this.players, this.players.map(() => new Navigation(navigation.obstacles, true)));
     Object.assign(encounter.player, { x: this.local.x, z: this.local.z });
   }
-  get local() { return this.players.find(p => p.id === this.match.local)!; }
-  get remote() { return this.players.find(p => p.id !== this.match.local)!; }
+
+  get local() { return this.players.find(player => player.id === this.match.local)!; }
+  get remotes() { return this.players.filter(player => player.id !== this.match.local); }
+  get remote() { return this.remotes[0]!; }
+  get remoteMotion() { return this.controllers.get(this.remote.id)!.motion; }
+  get remoteArsenal() { return this.controllers.get(this.remote.id)!.arsenal; }
+  get keys() { return this.controllers.get(this.remote.id)!.keys; }
+  get lastInputAt() { return this.controllers.get(this.remote.id)!.lastInputAt; }
+  set lastInputAt(value: number) { this.controllers.get(this.remote.id)!.lastInputAt = value; }
+
   command(data: Omit<Extract<Command, { type: 'fire' }>, 'seq'> | Omit<Extract<Command, { type: 'reload' | 'weapon' }>, 'seq'>) {
     if (!this.host && this.local.health > 0) this.send({ ...data, seq: ++this.outgoing });
   }
+
   sendInput(keys: Set<string>, yaw: number, pitch: number, jump: number, delta: number) {
     if (this.host) return;
     this.inputTimer += delta;
-    if (this.inputTimer < .05 && jump === this.jump) return;
-    this.jump = jump; this.inputTimer = 0;
+    if (this.inputTimer < .05 && jump === this.localJump) return;
+    this.localJump = jump; this.inputTimer = 0;
     this.send({ type: 'input', seq: ++this.outgoing, keys: [...keys], yaw, pitch, jump });
   }
+
   receive(from: string, data: unknown) {
-    if (from !== this.remote.id) return;
-    if (!this.host && data && typeof data === 'object' && 'type' in data && data.type === 'hit') {
-      const hit = data as unknown as { head: boolean; killed: boolean; armorBroken: boolean };
-      if (['head', 'killed', 'armorBroken'].every(k => typeof hit[k as keyof typeof hit] === 'boolean') && this.feedback.length < 32) this.feedback.push(hit);
+    if (this.host) {
+      const controller = this.controllers.get(from);
+      const player = this.players.find(value => value.id === from);
+      if (!controller || !player || !validCommand(data)) return;
+      this.lastPacketAt = controller.lastPacketAt = performance.now();
+      if (data.type === 'input') {
+        if (data.seq <= controller.inputSeq) return;
+        controller.inputSeq = data.seq; controller.keys = new Set(data.keys); player.yaw = data.yaw; player.pitch = data.pitch;
+        controller.lastInputAt = performance.now();
+        if (data.jump > controller.jump && player.health > 0) controller.motion.jump();
+        controller.jump = data.jump;
+      } else {
+        if (data.seq <= controller.commandSeq) return;
+        controller.commandSeq = data.seq;
+        if (controller.commands.length < 32) controller.commands.push(data);
+      }
       return;
     }
-    if (this.host) {
-      if (!validCommand(data)) return;
-      if (data.type === 'input') {
-        if (data.seq <= this.inputSeq) return;
-        this.inputSeq = data.seq; this.lastPacketAt = performance.now();
-        this.keys = new Set(data.keys); this.remote.yaw = data.yaw; this.remote.pitch = data.pitch;
-        this.lastInputAt = performance.now();
-        if (data.jump > this.jump && this.remote.health > 0) this.remoteMotion.jump(); this.jump = data.jump;
-      } else {
-        // 高频输入与可靠操作使用不同 Steam 通道，二者允许交错到达，分别判重。
-        if (data.seq <= this.commandSeq) return;
-        this.commandSeq = data.seq; this.lastPacketAt = performance.now();
-        if (this.commands.length < 32) this.commands.push(data);
+    if (from !== this.match.host || !data || typeof data !== 'object' || !('type' in data)) return;
+    if (data.type === 'hit') {
+      const hit = data as { to?: unknown; head?: unknown; killed?: unknown; armorBroken?: unknown };
+      if (hit.to === this.local.id && [hit.head, hit.killed, hit.armorBroken].every(value => typeof value === 'boolean') && this.feedback.length < 32) {
+        this.feedback.push({ head: hit.head as boolean, killed: hit.killed as boolean, armorBroken: hit.armorBroken as boolean });
       }
-    } else {
-      if (!validWorld(data, this.match.members) || data.seq <= this.worldSeq) return;
-      this.worldSeq = data.seq; this.lastPacketAt = performance.now();
-      for (const p of data.players) Object.assign(this.players.find(v => v.id === p.id)!, p);
-      const e = this.encounter;
-      const now = performance.now();
-      const duration = this.worldReceivedAt ? Math.max(.06, Math.min(.2, (now - this.worldReceivedAt) / 1000)) : .1;
-      this.worldReceivedAt = now; this.authoritativeKeys = new Set(data.inputKeys);
-      const current = new Map(e.zombies.map(z => [z.id, z]));
-      const nextIds = new Set(data.zombies.map(z => z.id));
-      e.zombies = data.zombies.map(incoming => {
-        const zombie = current.get(incoming.id);
-        if (!zombie) { this.zombieTracks.delete(incoming.id); return { ...incoming }; }
-        const fromX = zombie.x, fromZ = zombie.z, fromHeading = zombie.heading ?? incoming.heading ?? 0;
-        Object.assign(zombie, incoming); zombie.x = fromX; zombie.z = fromZ; zombie.heading = fromHeading;
-        this.zombieTracks.set(zombie.id, { fromX, fromZ, fromHeading, toX: incoming.x, toZ: incoming.z,
-          toHeading: incoming.heading ?? fromHeading, elapsed: 0, duration });
-        return zombie;
-      });
-      for (const id of this.zombieTracks.keys()) if (!nextIds.has(id)) this.zombieTracks.delete(id);
-      e.wave = data.wave; e.wavesCleared = data.wavesCleared; e.waveSpawned = data.waveSpawned;
-      e.totalSpawned = data.totalSpawned; e.intermission = data.intermission;
-      e.elapsed = data.failed ? data.elapsed : Math.max(e.elapsed, data.elapsed); e.kills = data.kills; e.failed = data.failed;
+      return;
     }
+    if (!validWorld(data, this.match.members) || data.seq <= this.worldSeq) return;
+    this.worldSeq = data.seq; this.lastPacketAt = performance.now();
+    const wasDead = this.local.health === 0;
+    for (const player of data.players) Object.assign(this.players.find(value => value.id === player.id)!, player);
+    const input = data.inputs.find(value => value.id === this.local.id);
+    this.authoritativeKeys = new Set(input?.keys ?? []);
+    if (wasDead && this.local.health > 0) {
+      Object.assign(this.encounter.player, { x: this.local.x, z: this.local.z });
+      this.revived = true;
+    }
+    const e = this.encounter;
+    const now = performance.now();
+    const duration = this.worldReceivedAt ? Math.max(.06, Math.min(.2, (now - this.worldReceivedAt) / 1000)) : .1;
+    this.worldReceivedAt = now;
+    const current = new Map(e.zombies.map(zombie => [zombie.id, zombie]));
+    const nextIds = new Set(data.zombies.map(zombie => zombie.id));
+    e.zombies = data.zombies.map(incoming => {
+      const zombie = current.get(incoming.id);
+      if (!zombie) { this.zombieTracks.delete(incoming.id); return { ...incoming }; }
+      const fromX = zombie.x, fromZ = zombie.z, fromHeading = zombie.heading ?? incoming.heading ?? 0;
+      Object.assign(zombie, incoming); zombie.x = fromX; zombie.z = fromZ; zombie.heading = fromHeading;
+      this.zombieTracks.set(zombie.id, { fromX, fromZ, fromHeading, toX: incoming.x, toZ: incoming.z,
+        toHeading: incoming.heading ?? fromHeading, elapsed: 0, duration });
+      return zombie;
+    });
+    for (const id of this.zombieTracks.keys()) if (!nextIds.has(id)) this.zombieTracks.delete(id);
+    e.wave = data.wave; e.wavesCleared = data.wavesCleared; e.waveSpawned = data.waveSpawned;
+    e.totalSpawned = data.totalSpawned; e.intermission = data.intermission;
+    e.elapsed = data.failed ? data.elapsed : Math.max(e.elapsed, data.elapsed); e.kills = data.kills; e.failed = data.failed;
   }
+
+  consumeRevival() { const value = this.revived; this.revived = false; return value; }
+
   smoothWorld(delta: number) {
     if (this.host || delta <= 0) return;
     if (!this.encounter.failed) this.encounter.elapsed += delta;
@@ -107,41 +138,60 @@ export class CoopSession {
       zombie.heading = track.fromHeading + turn * t;
     }
   }
-  advanceRemote(delta: number, navigation: Navigation, fire: (pawn: Pawn, arsenal: Arsenal) => void) {
+
+  advanceRemotes(delta: number, navigation: Navigation, fire: (pawn: Pawn, arsenal: Arsenal) => void) {
     if (!this.host) return;
-    this.remoteArsenal.update(delta);
-    if (performance.now() - this.lastInputAt > 500) this.keys.clear();
-    if (this.remote.health > 0) {
-      if (this.remoteMotion.update(this.remote, this.remote.yaw, this.keys, delta, navigation, this.encounter.zombies)) this.remote.health = 0;
-      this.remote.height = this.remoteMotion.height;
-      while (this.commands.length) {
-        const command = this.commands[0];
-        // 网络抖动可能让下一枪提前到达：等待冷却，不丢掉合法射击，也不允许突发连发。
-        if (command.type === 'fire' && (this.remoteArsenal.blocked || this.remoteArsenal.gun.reloading || this.remoteArsenal.gun.cooldown > 1e-8)) break;
-        this.commands.shift();
-        if (command.type === 'weapon') this.remoteArsenal.request(command.index);
-        else if (command.type === 'reload') this.remoteArsenal.reload();
-        // 射击方向属于该发子弹，不能把排队期间收到的新移动朝向改回旧值。
-        else if (command.type === 'fire') fire({ ...this.remote, yaw: command.yaw, pitch: command.pitch }, this.remoteArsenal);
+    for (const player of this.remotes) {
+      const controller = this.controllers.get(player.id)!;
+      controller.arsenal.update(delta);
+      if (performance.now() - controller.lastInputAt > 500) controller.keys.clear();
+      if (player.health > 0) {
+        if (controller.motion.update(player, player.yaw, controller.keys, delta, navigation, this.encounter.zombies)) player.health = 0;
+        player.height = controller.motion.height;
+        while (controller.commands.length) {
+          const command = controller.commands[0];
+          if (command.type === 'fire' && (controller.arsenal.blocked || controller.arsenal.gun.reloading || controller.arsenal.gun.cooldown > 1e-8)) break;
+          controller.commands.shift();
+          if (command.type === 'weapon') controller.arsenal.request(command.index);
+          else if (command.type === 'reload') controller.arsenal.reload();
+          else if (command.type === 'fire') fire({ ...player, yaw: command.yaw, pitch: command.pitch }, controller.arsenal);
+        }
       }
+      if (player.health === 0) controller.commands = [];
+      player.weapon = controller.arsenal.active; player.shots = controller.arsenal.shots;
+      player.ammo = controller.arsenal.gun.ammo; player.reloading = controller.arsenal.gun.reloading; player.reloadProgress = controller.arsenal.gun.animationProgress;
     }
-    if (this.remote.health === 0) this.commands = [];
-    this.remote.weapon = this.remoteArsenal.active; this.remote.shots = this.remoteArsenal.shots;
-    this.remote.ammo = this.remoteArsenal.gun.ammo; this.remote.reloading = this.remoteArsenal.gun.reloading; this.remote.reloadProgress = this.remoteArsenal.gun.animationProgress;
   }
-  sendHit(head: boolean, killed: boolean, armorBroken: boolean) { this.send({ type: 'hit', head, killed, armorBroken }); }
+
+  advanceRemote(delta: number, navigation: Navigation, fire: (pawn: Pawn, arsenal: Arsenal) => void) { this.advanceRemotes(delta, navigation, fire); }
+
+  reviveAll() {
+    const localWasDead = this.local.health === 0;
+    this.players.forEach((player, index) => {
+      const wasDead = player.health === 0;
+      if (wasDead) Object.assign(player, SPAWNS[index], { height: 0 });
+      Object.assign(player, { health: PLAYER.health, lastDamageAt: -1e6 });
+      const controller = this.controllers.get(player.id);
+      if (wasDead && controller) { controller.motion.reset(); controller.keys.clear(); controller.commands = []; }
+    });
+    if (localWasDead) Object.assign(this.encounter.player, { x: this.local.x, z: this.local.z });
+    return localWasDead;
+  }
+
+  sendHit(to: string, head: boolean, killed: boolean, armorBroken: boolean) { this.send({ type: 'hit', to, head, killed, armorBroken }); }
+
   broadcast(delta: number, force = false) {
     if (!this.host) return;
     this.worldTimer += delta;
-    // 常见波次用 15 Hz 提高跟随性；尸群很大时退回 10 Hz 控制带宽。
     const interval = this.encounter.zombies.length > 96 ? .1 : 1 / 15;
     if (!force && this.worldTimer < interval) return; this.worldTimer = 0;
     const e = this.encounter;
-    const state: WorldState = { type: 'world', seq: ++this.outgoing, inputAck: this.inputSeq, inputKeys: [...this.keys],
-      players: this.players.map(p => ({ ...p, x: compact(p.x), z: compact(p.z), height: compact(p.height), yaw: compact(p.yaw), pitch: compact(p.pitch), lastDamageAt: compact(p.lastDamageAt) })),
-      zombies: e.zombies.map(z => ({ ...z, x: compact(z.x), z: compact(z.z), downTime: compact(z.downTime), bornAt: compact(z.bornAt),
-        ...(z.heading === undefined ? {} : { heading: compact(z.heading) }), ...(z.attackTime === undefined ? {} : { attackTime: compact(z.attackTime) }),
-        ...(z.avoidance === undefined ? {} : { avoidance: compact(z.avoidance) }) })), wave: e.wave, wavesCleared: e.wavesCleared, waveSpawned: e.waveSpawned,
+    const state: WorldState = { type: 'world', seq: ++this.outgoing,
+      inputs: this.remotes.map(player => { const controller = this.controllers.get(player.id)!; return { id: player.id, ack: controller.inputSeq, keys: [...controller.keys] }; }),
+      players: this.players.map(player => ({ ...player, x: compact(player.x), z: compact(player.z), height: compact(player.height), yaw: compact(player.yaw), pitch: compact(player.pitch), lastDamageAt: compact(player.lastDamageAt), reloadProgress: compact(player.reloadProgress) })),
+      zombies: e.zombies.map(zombie => ({ ...zombie, x: compact(zombie.x), z: compact(zombie.z), downTime: compact(zombie.downTime), bornAt: compact(zombie.bornAt),
+        ...(zombie.heading === undefined ? {} : { heading: compact(zombie.heading) }), ...(zombie.attackTime === undefined ? {} : { attackTime: compact(zombie.attackTime) }),
+        ...(zombie.avoidance === undefined ? {} : { avoidance: compact(zombie.avoidance) }) })), wave: e.wave, wavesCleared: e.wavesCleared, waveSpawned: e.waveSpawned,
       totalSpawned: e.totalSpawned, intermission: compact(e.intermission), elapsed: compact(e.elapsed), kills: e.kills, failed: e.failed };
     this.send(state);
   }

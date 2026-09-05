@@ -33,7 +33,7 @@ interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: 
 
 export class Game {
   private coop: CoopSession | null = null;
-  private partner: PartnerView | null = null;
+  private partners = new Map<string, PartnerView>();
   private jumpSequence = 0;
   private coopTimer: ReturnType<typeof setInterval> | null = null;
   private scene = new THREE.Scene();
@@ -73,6 +73,7 @@ export class Game {
   private flashTime = 0;
   private displayedWeapon = 0;
   private spectatingPlayer: string | null = null;
+  private spectatedPlayerId: string | null = null;
   private spectatorShots = 0;
   private spectatorFireRemaining = 0;
   private elapsed = 0;
@@ -217,6 +218,10 @@ export class Game {
     if (this.phase !== 'playing' || event.button !== 0) return;
     event.preventDefault();
     this.renderer.domElement.focus({ preventScroll: true });
+    if (this.coop?.local.health === 0) {
+      if (!this.pointerLocked) this.requestPointerLock(); else this.cycleSpectator();
+      return;
+    }
     if (!this.pointerLocked) { this.requestPointerLock(); return; }
     this.audio.unlock();
     this.trigger = this.firearm.definition.automatic;
@@ -300,7 +305,7 @@ export class Game {
     this.result = null;
     this.elapsed = 0;
     this.view.set(0, 0); this.aim.set(0, 0); this.recoil = 0; this.flashTime = 0; this.lastShot = null;
-    this.spectatingPlayer = null; this.spectatorShots = 0; this.spectatorFireRemaining = 0;
+    this.spectatingPlayer = null; this.spectatedPlayerId = null; this.spectatorShots = 0; this.spectatorFireRemaining = 0;
     this.renderer.shadowMap.needsUpdate = true;
     for (const effect of this.effects) this.scene.remove(effect.mesh);
     this.effects = [];
@@ -318,7 +323,9 @@ export class Game {
   beginCoop(match: Match, send: (data: unknown) => void) {
     this.prepare('survival'); this.jumpSequence = 0;
     this.coop = new CoopSession(match, this.encounter, this.navigation, send);
-    this.partner = new PartnerView(); this.scene.add(this.partner);
+    for (const player of this.coop.remotes) {
+      const partner = new PartnerView(); this.partners.set(player.id, partner); this.scene.add(partner);
+    }
     this.phase = 'ready'; this.start(); this.coop.broadcast(0, true);
     this.coopTimer = setInterval(() => {
       if (!this.coop || this.phase === 'failed') return;
@@ -338,7 +345,8 @@ export class Game {
   receiveCoop(from: string, data: unknown) { this.coop?.receive(from, data); this.dirty = true; }
   private stopCoop() {
     if (this.coopTimer) clearInterval(this.coopTimer); this.coopTimer = null;
-    if (this.partner) this.scene.remove(this.partner); this.partner = null; this.coop = null;
+    for (const partner of this.partners.values()) this.scene.remove(partner);
+    this.partners.clear(); this.coop = null;
   }
 
   menu() {
@@ -450,8 +458,26 @@ export class Game {
     return [...this.world.surfaces, this.zombieField];
   }
 
+  private spectatedPlayer() {
+    if (!this.coop || this.coop.local.health > 0) { this.spectatedPlayerId = null; return null; }
+    const alive = this.coop.remotes.filter(player => player.health > 0);
+    const selected = alive.find(player => player.id === this.spectatedPlayerId) ?? alive[0] ?? null;
+    this.spectatedPlayerId = selected?.id ?? null;
+    return selected;
+  }
+
+  private cycleSpectator() {
+    if (!this.coop || this.coop.local.health > 0) return;
+    const alive = this.coop.remotes.filter(player => player.health > 0);
+    if (alive.length < 2) return;
+    const current = alive.findIndex(player => player.id === this.spectatedPlayerId);
+    this.spectatedPlayerId = alive[(current + 1 + alive.length) % alive.length].id;
+    this.spectatingPlayer = null; this.spectatorFireRemaining = 0; this.dirty = true;
+    this.updateAim(0); this.publish();
+  }
+
   private updateAim(delta: number) {
-    const spectated = this.coop?.local.health === 0 ? this.coop.remote : null;
+    const spectated = this.spectatedPlayer();
     this.camera.position.set(spectated?.x ?? this.encounter.player.x, CONFIG.camera.height + (spectated?.height ?? this.playerMotion.height), spectated?.z ?? this.encounter.player.z);
     this.camera.rotation.set(spectated?.pitch ?? this.view.y, spectated?.yaw ?? this.view.x, 0, 'YXZ');
     this.camera.updateMatrixWorld(true);
@@ -535,7 +561,7 @@ export class Game {
         tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
       }
     }
-    if (landed) this.coop?.sendHit(head, killed, armorBroken);
+    if (landed) this.coop?.sendHit(pawn.id, head, killed, armorBroken);
     if (!this.background) this.audio.shot();
   };
 
@@ -544,6 +570,7 @@ export class Game {
     const local = coop.local, controlled = this.phase === 'playing' && this.pointerLocked && local.health > 0;
     const keys = controlled ? this.keys : new Set<string>();
     if (coop.host) {
+      const clearedBefore = this.encounter.wavesCleared;
       this.encounter.update(delta, this.spawnEnemy, step => {
         if (local.health > 0) {
           if (this.playerMotion.update(this.encounter.player, this.view.x, keys, step, this.navigation, this.encounter.zombies)) local.health = 0;
@@ -551,11 +578,19 @@ export class Game {
         }
         local.yaw = this.view.x; local.pitch = this.view.y; local.weapon = this.arsenal.active; local.shots = this.arsenal.shots;
         local.ammo = this.firearm.ammo; local.reloading = this.firearm.reloading; local.reloadProgress = this.firearm.animationProgress;
-        coop.advanceRemote(step, this.navigation, this.remoteShoot);
+        coop.advanceRemotes(step, this.navigation, this.remoteShoot);
       });
-      coop.broadcast(delta);
+      const revived = this.encounter.wavesCleared > clearedBefore;
+      if (revived) {
+        if (coop.reviveAll()) this.playerMotion.reset();
+        this.spectatedPlayerId = null; this.spectatingPlayer = null;
+      }
+      coop.broadcast(delta, revived);
     } else {
       coop.sendInput(keys, this.view.x, this.view.y, this.jumpSequence, delta);
+      if (coop.consumeRevival()) {
+        this.playerMotion.reset(); this.spectatedPlayerId = null; this.spectatingPlayer = null;
+      }
       if (local.health > 0) this.playerMotion.update(this.encounter.player, this.view.x, keys, delta, this.navigation, this.encounter.zombies);
       coop.smoothWorld(delta);
       const discrepancy = Math.hypot(this.encounter.player.x - local.x, this.encounter.player.z - local.z);
@@ -570,9 +605,10 @@ export class Game {
       for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); this.audio.tone(950, 450, .07, .025); }
     }
     this.encounter.health = local.health; this.encounter.lastDamageAt = local.lastDamageAt; this.kills = this.encounter.kills;
-    this.weapon.root.visible = local.health > 0 || coop.remote.health > 0;
+    this.weapon.root.visible = local.health > 0 || coop.remotes.some(player => player.health > 0);
     if (local.health === 0) { this.keys.clear(); this.trigger = false; }
-    this.partner?.update(coop.remote, delta, local.health === 0, this.encounter.elapsed);
+    const spectated = this.spectatedPlayer();
+    for (const player of coop.remotes) this.partners.get(player.id)?.update(player, delta, player.id === spectated?.id, this.encounter.elapsed);
     if (this.encounter.failed) this.endRun();
   }
 
@@ -727,8 +763,8 @@ export class Game {
   };
 
   private publish() {
-    const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0 } : undefined;
-    const observed = this.coop?.local.health === 0 ? this.coop.remote : null;
+    const observed = this.spectatedPlayer();
+    const coop = this.coop ? { host: this.coop.host, localId: this.coop.local.id, players: this.coop.players.map(p => ({ id: p.id, name: p.name, health: p.health })), spectating: this.coop.local.health === 0, spectatingId: observed?.id } : undefined;
     const inventory = observed ? WEAPONS.map((gun, index) => index === observed.weapon ? observed.ammo : gun.capacity) : this.arsenal.guns.map(gun => gun.ammo);
     this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: observed?.reloading ?? this.firearm.reloading, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, inventory });
   }
@@ -752,7 +788,7 @@ export class Game {
       return { x: (p.x + 1) / 2 * this.width, y: (1 - p.y) / 2 * this.height };
     };
     return {
-      coop: this.coop ? { host: this.coop.host, players: this.coop.players.map(p => ({ ...p })), local: this.coop.local.id } : null,
+      coop: this.coop ? { host: this.coop.host, players: this.coop.players.map(p => ({ ...p })), local: this.coop.local.id, spectating: this.spectatedPlayerId } : null,
       wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission,
       jump: { height: this.playerMotion.height, velocity: this.playerMotion.velocity, grounded: this.playerMotion.grounded },
       overWater: isWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),

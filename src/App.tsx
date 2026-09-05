@@ -163,22 +163,22 @@ export function App() {
 
     {state.phase === 'paused' && !settings && !state.coop && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><span className="label">WATCH ON HOLD</span><h2>哨站已暂停</h2><p>准备好后，继续移动与战斗。{state.mode === 'survival' && '坚守计时已暂停。'}</p><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button><small>按 ESC 继续</small></div></section>}
 
-    {state.coop && state.phase !== 'failed' && <aside className="coop-team" aria-label="双人小队">
-      <span className="label">双人协作 · {state.coop.host ? '房主' : '队员'}</span>
+    {state.coop && state.phase !== 'failed' && <aside className="coop-team" aria-label="联机小队">
+      <span className="label">{state.coop.players.length} 人协作 · {state.coop.host ? '房主' : '队员'}</span>
       {state.coop.players.map(player => <div key={player.id} className={player.health === 0 ? 'fallen' : ''}>
         <span>{player.name}{player.id === state.coop!.localId ? '（你）' : ''}</span><b>{player.health === 0 ? '已阵亡' : `${player.health} HP`}</b>
         <progress max={100} value={player.health} aria-label={`${player.name}生命值`} />
       </div>)}
     </aside>}
-    {state.coop?.spectating && state.phase === 'playing' && <div className="coop-spectating" role="status"><strong>你已阵亡 · 正在观战队友</strong><span>队友仍可继续守波，两人都阵亡才结束。</span></div>}
+    {state.coop?.spectating && state.phase === 'playing' && <div className="coop-spectating" role="status"><strong>你已阵亡 · 正在观战 {state.coop.players.find(player => player.id === state.coop?.spectatingId)?.name ?? '队友'}</strong><span>点击鼠标左键切换存活队友；清完本波后全员复活。</span></div>}
     {state.coop && state.phase === 'paused' && !settings && <section className="pause-screen" aria-label="联机菜单"><div className="pause-content">
-      <span className="label">TEAM STILL IN ACTION</span><h2>联机对局仍在继续</h2><p>打开菜单不会暂停尸群，你仍会受到攻击。</p>
+      <span className="label">TEAM STILL IN ACTION</span><h2>联机对局仍在继续</h2><p>打开菜单不会暂停尸群，存活玩家仍会受到攻击。</p>
       <button className="start-button" onClick={() => game.current?.start()}>返回{state.coop.spectating ? '观战' : '战斗'} <Icon name="arrow" /></button>
       <button className="text-button" onClick={leaveCoop}>离开对局</button>
     </div></section>}
-    {state.coop && state.phase === 'failed' && state.result && <section className="pause-screen" aria-label="双人结算"><div className="pause-content">
-      <span className="label">BOTH SURVIVORS DOWN</span><h2>小队全员阵亡</h2><p>共同守住 <strong>{state.result.waves}</strong> 波 · 击杀 <strong>{state.result.kills}</strong> 只</p>
-      <p>坚守 {formatDuration(state.result.duration)} · 双人成绩不计入单人排行榜</p>
+    {state.coop && state.phase === 'failed' && state.result && <section className="pause-screen" aria-label="多人结算"><div className="pause-content">
+      <span className="label">SQUAD ELIMINATED</span><h2>小队全员阵亡</h2><p>共同守住 <strong>{state.result.waves}</strong> 波 · 击杀 <strong>{state.result.kills}</strong> 只</p>
+      <p>坚守 {formatDuration(state.result.duration)} · 多人成绩不计入单人排行榜</p>
       <button className="start-button" onClick={leaveCoop}>返回多人大厅 <Icon name="arrow" /></button>
     </div></section>}
     {state.phase === 'breaching' && state.breach && <BreachOverlay breach={state.breach} />}
