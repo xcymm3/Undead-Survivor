@@ -39,7 +39,10 @@ async function start() {
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => requests.add(request.url()));
   await page.waitForURL('undead://game/');
-  await expect(page.getByRole('button', { name: '多人模式' })).toBeEnabled({ timeout: 20000 });
+  // GitHub 的全新 Windows runner 首次解压便携包并解析六套枪械模型明显慢于开发机。
+  // 先用单人入口确认共享资源已经就绪，再验收多人入口，避免把冷启动误判成 Steam 故障。
+  await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled({ timeout: 90000 });
+  await expect(page.getByRole('button', { name: '多人模式' })).toBeEnabled();
   await assertHidden();
   assert.equal(await app.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(await app.evaluate(({ app }) => app.getVersion()), version);
