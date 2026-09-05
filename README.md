@@ -2,6 +2,10 @@
 
 基于 [Undead Tower](https://github.com/xcymm3/Undead-Tower) 开发的低多边形第一人称生存射击游戏。在灰松哨站封锁区内自由移动、跳河与射击，利用桥梁抵挡一波波追踪玩家的僵尸。
 
+## 下载 Windows 版
+
+[下载最新 Windows x64 便携版](https://github.com/xcymm3/Undead-Survivor/releases/latest)。无需安装，下载 Release 中的 `Undead Survivor-版本号.exe` 后双击运行；首次运行可能出现 Windows SmartScreen 提示。
+
 ![跳河后的实际游戏画面](docs/screenshots/river-crossing.png)
 
 ## 怎么玩

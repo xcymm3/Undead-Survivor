@@ -1,0 +1,82 @@
+name: 发布 Windows 便携版
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 构建并发布 EXE
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 校验标签与项目版本
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $expectedTag = "v$version"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "发布标签 $env:GITHUB_REF_NAME 与 package.json 版本 $version 不一致，应使用 $expectedTag"
+          }
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行单元测试
+        run: npm test
+
+      - name: 构建 Windows 便携版
+        run: npm run dist:portable
+
+      - name: 验收 Windows 便携版
+        run: npm run test:portable
+
+      - name: 准备发布文件
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $exe = "release/Undead Survivor-$version.exe"
+          $checksum = "release/Undead Survivor-$version.sha256"
+          $guide = "release/联机说明-$version.txt"
+
+          if (-not (Test-Path -LiteralPath $exe)) {
+            throw "未找到发布文件：$exe"
+          }
+
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Undead Survivor-$version.exe" | Set-Content -LiteralPath $checksum -Encoding ascii
+          Copy-Item -LiteralPath "docs/MULTIPLAYER.md" -Destination $guide
+
+      - name: 创建 GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $exe = "release/Undead Survivor-$version.exe"
+          $checksum = "release/Undead Survivor-$version.sha256"
+          $guide = "release/联机说明-$version.txt"
+
+          gh release create $env:GITHUB_REF_NAME $exe $checksum $guide `
+            --verify-tag `
+            --generate-notes `
+            --title "Undead Survivor $version" `
+            --latest
