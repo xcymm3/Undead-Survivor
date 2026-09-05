@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { capture, fire, lookAt, snapshot, start } from './controls';
+import { CONFIG } from '../../src/game/config';
 
 test('自由转向、WASD移动并开火，枪口与准星一致，暂停清空按键', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -44,6 +45,23 @@ test('自由视角对准练习靶爆头，击倒复位与受伤隔离', async ({
   expect((await snapshot(page)).audio.deathCues).toBe(1);
   await expect.poll(async () => (await snapshot(page)).targets[1].health, { timeout: 5000 }).toBe(100);
   expect((await snapshot(page)).health).toBe(100);
+});
+
+test('低头缓慢旋转时忽略整屏鼠标回绕，不会突转 180 度', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => {
+    const canvas = document.querySelector('canvas')!;
+    for (let index = 0; index < 200; index++) canvas.dispatchEvent(new PointerEvent('pointermove', { movementY: 4 }));
+    for (let index = 0; index < 20; index++) canvas.dispatchEvent(new PointerEvent('pointermove', { movementX: -3 }));
+  });
+  const before = await snapshot(page);
+  expect(before.pitch).toBeCloseTo(-CONFIG.camera.pitchLimit, 10);
+  await page.evaluate(() => document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointermove', { movementX: 1428 })));
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const after = await snapshot(page);
+  expect(after.yaw).toBeCloseTo(before.yaw, 10);
+  await page.evaluate(() => document.querySelector('canvas')!.dispatchEvent(new PointerEvent('pointermove', { movementX: -3 })));
+  expect((await snapshot(page)).yaw).toBeGreaterThan(after.yaw);
 });
 
 for (const width of [320, 375, 414, 768]) {

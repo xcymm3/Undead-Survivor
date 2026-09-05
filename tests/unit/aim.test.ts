@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { MIN_WEAPON_CONVERGENCE, visualWeaponTarget, weaponQuaternion } from '../../src/game/aim';
-import { turnView } from '../../src/game/player';
+import { filterPointerMovement, turnView } from '../../src/game/player';
 import { CONFIG } from '../../src/game/config';
 describe('自由视角与枪口瞄准', () => {
   it('水平累积转向超过一圈，俯仰限制防止翻转', () => {
@@ -26,6 +26,15 @@ describe('自由视角与枪口瞄准', () => {
       const expected = target.clone().sub(muzzle).normalize();
       expect(direction.dot(expected)).toBeCloseTo(1, 12);
     }
+  });
+  it('低头旋转时忽略 Pointer Lock 产生的整屏回绕位移', () => {
+    const normal = filterPointerMovement(-3, 2, 1440, 900);
+    expect(normal).toEqual({ dx: -3, dy: 2 });
+    expect(filterPointerMovement(1440, -900, 1440, 900)).toEqual({ dx: 0, dy: 0 });
+    expect(filterPointerMovement(1428, 0, 3840, 2160)).toEqual({ dx: 0, dy: 0 });
+    const before = turnView(0.4, -CONFIG.camera.pitchLimit, normal.dx, normal.dy);
+    const wrapped = filterPointerMovement(1428, 0, 1440, 900);
+    expect(turnView(before.yaw, before.pitch, wrapped.dx, wrapped.dy)).toEqual(before);
   });
   it('近处地面命中不会让第一人称枪模突然向相机收敛', () => {
     const near = new Vector3(0, 0, -1.7);

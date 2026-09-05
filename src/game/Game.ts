@@ -23,7 +23,7 @@ import { BloodEffects } from './blood';
 import { ArmorEffects } from './armorEffects';
 import { BreachSequence } from './breach';
 import { Navigation } from './navigation';
-import { PlayerMotion, turnView } from './player';
+import { filterPointerMovement, PlayerMotion, turnView } from './player';
 import { isWater, BRIDGES, RIVER_POINTS } from './terrain';
 import { CoopSession } from '../multiplayer/CoopSession';
 import { PartnerView } from '../multiplayer/PartnerView';
@@ -212,7 +212,8 @@ export class Game {
   }
   private pointerMove = (event: PointerEvent) => {
     if (this.phase !== 'playing' || !this.pointerLocked) return;
-    const next = turnView(this.view.x, this.view.y, event.movementX, event.movementY);
+    const movement = filterPointerMovement(event.movementX, event.movementY, this.width, this.height);
+    const next = turnView(this.view.x, this.view.y, movement.dx, movement.dy);
     this.view.set(next.yaw, next.pitch);
   };
 

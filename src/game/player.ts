@@ -3,6 +3,13 @@ import type { Position, Zombie } from './encounter';
 import { isWater } from './terrain';
 import type { Navigation } from './navigation';
 
+/** 过滤 Pointer Lock 在 Windows 光标回绕时产生的半屏/整屏瞬时位移。 */
+export function filterPointerMovement(dx: number, dy: number, width: number, height: number) {
+  const maximum = Math.PI / 2 / CONFIG.camera.sensitivity;
+  const clean = (value: number, extent: number) => Number.isFinite(value) && Math.abs(value) < Math.min(maximum, Math.max(240, extent * 0.45)) ? value : 0;
+  return { dx: clean(dx, width), dy: clean(dy, height) };
+}
+
 export function turnView(yaw: number, pitch: number, dx: number, dy: number) {
   return {
     yaw: yaw - dx * CONFIG.camera.sensitivity,
