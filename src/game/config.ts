@@ -1,8 +1,9 @@
 import type { ActiveGraphicsPreset, GraphicsSettings } from './graphics';
+import type { ReloadStage } from './reloadAnimation';
 
 export const CONFIG = {
   camera: { fov: 61, height: 1.7, sensitivity: 0.0022, pitchLimit: 85 * Math.PI / 180 },
-  weapon: { capacity: 30, interval: 0.15, reloadDuration: 0.775, range: 180 },
+  weapon: { capacity: 30, interval: 0.15, reloadDuration: 1.25, range: 180 },
   target: { respawn: 3, bodyDamage: 50, headDamage: 100 },
 } as const;
 
@@ -55,6 +56,7 @@ export interface GameSnapshot {
   result: RunResult | null;
   ammo: number;
   reloading: boolean;
+  reloadStage: ReloadStage | null;
   shots: number;
   hits: number;
   kills: number;

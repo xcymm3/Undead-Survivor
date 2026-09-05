@@ -24,7 +24,7 @@
 
 开局即可使用六款枪械：**1 步枪、2 P90 冲锋枪、3 半自动手枪、4 左轮手枪、5 泵动霰弹枪、6 栓动狙击枪**。
 
-步枪和 P90 可以按住左键连发，其余枪械每次点击射击一次。每把枪单独保留弹匣里的子弹，切枪不会补弹；备弹无限，但仍需要换弹。霰弹枪逐发装填，切枪会等待当前动作结束。
+步枪和 P90 可以按住左键连发，其余枪械每次点击射击一次。每把枪单独保留弹匣里的子弹，切枪不会补弹；备弹无限，但仍需要换弹。六把枪各有独立的五阶段换弹轨迹和时间：准备、卸弹、插入、枪机操作、回正。霰弹枪按每发 0.55 秒逐发装填，切枪会等待当前动作结束。
 
 | 操作 | 功能 |
 | --- | --- |
@@ -62,11 +62,11 @@ npm run dev
 
 游玩期间保持终端窗口打开；结束后在终端按 `Ctrl+C` 即可停止。若终端显示了不同端口，请以终端中的本地地址为准。画面无法加载时，请确认浏览器已开启硬件加速。
 
-## Steam 2～4 人协作（0.7.2 EXE 测试版）
+## Steam 2～4 人协作（0.7.3 EXE 测试版）
 
-首页「多人模式」可以创建、搜索或按房间号加入最多四人的房间。达到 2 人后房主即可开始，也可以继续等待至 4 人。玩家阵亡后以第一人称观战，点击鼠标左键切换存活队友；每波清完后全员恢复 100 HP，阵亡玩家在安全出生点复活。只有全队同时阵亡才结束，多人成绩不写入单人排行榜。
+首页「多人模式」可以创建、搜索或按房间号加入最多四人的房间。每名玩家可选择六套 Quaternius 角色外形和两组服装颜色，选择保存在本机并在开局时同步给队友。达到 2 人后房主即可开始，也可以继续等待至 4 人。玩家阵亡后以第一人称观战，点击鼠标左键切换存活队友；每波清完后全员恢复 100 HP，阵亡玩家在安全出生点复活。只有全队同时阵亡才结束，多人成绩不写入单人排行榜。
 
-每名玩家需要一台 Windows 电脑和一个不同的 Steam 账号，所有人使用同一版本的 EXE，通过 Spacewar App ID 480 测试。从 Release 下载 `Undead-Survivor-0.7.2.exe` 和 `Multiplayer-Guide-0.7.2.txt` 发给朋友即可，无需安装开发环境。房间流程、画质调整和常见问题见 [EXE 联机说明](docs/MULTIPLAYER.md)。
+每名玩家需要一台 Windows 电脑和一个不同的 Steam 账号，所有人使用同一版本的 EXE，通过 Spacewar App ID 480 测试。从 Release 下载 `Undead-Survivor-0.7.3.exe` 和 `Multiplayer-Guide-0.7.3.txt` 发给朋友即可，无需安装开发环境。房间流程、画质调整和常见问题见 [EXE 联机说明](docs/MULTIPLAYER.md)。
 
 ## 开发验证
 
@@ -80,4 +80,4 @@ npm run test:e2e
 
 ## 鸣谢
 
-枪械模型来自 [Quaternius Animated Guns Pack](https://quaternius.com/packs/animatedguns.html)，采用 CC0 许可。
+枪械模型来自 [Quaternius Animated Guns Pack](https://quaternius.com/packs/animatedguns.html)，多人角色来自 [Quaternius Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)，均采用 CC0 许可。
