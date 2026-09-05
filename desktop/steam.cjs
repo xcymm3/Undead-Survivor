@@ -1,12 +1,15 @@
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
-const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v1';
+const { deflateRawSync, inflateRawSync } = require('node:zlib');
+const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v2';
+const UNRELIABLE_LIMIT = 1150, SNAPSHOT_CHUNK = 690;
 const idOf = value => String(value.steamId64);
 
 class SteamRooms {
   constructor(client, native, emit) {
     this.client = client; this.native = native; this.emit = emit; this.id = idOf(client.localplayer.getSteamId());
     this.name = client.localplayer.getName().slice(0, 128); this.lobby = null; this.match = null; this.pending = null; this.lastPeer = 0;
+    this.snapshots = new Map();
     this.handles = [client.callback.register(6, ({ remote }) => {
       if (this.memberIds().includes(String(remote))) client.networking.acceptP2PSession(remote);
     }), client.callback.register(7, ({ remote }) => {
@@ -58,7 +61,7 @@ class SteamRooms {
         lobby.leave();
       }
     } finally {
-      this.lobby = null; this.match = null; this.pending = null; this.publish();
+      this.lobby = null; this.match = null; this.pending = null; this.snapshots.clear(); this.publish();
     }
   }
   abort(message) { try { this.leave(); } catch { /* SDK 不可用时以本地清理为准。 */ } this.emit({ type: 'left', message }); }
@@ -70,15 +73,49 @@ class SteamRooms {
     this.lobby.setJoinable(false); this.lobby.setData('state', 'loading'); this.sendControl('prepare', this.pending); this.publish();
   }
   sendControl(type, payload) { this.send({ type, payload }); }
-  send(packet) {
+  send(packet, mode = 2) {
     if (!this.lobby) return false;
     const data = Buffer.from(JSON.stringify({ game: GAME, version: VERSION, room: String(this.lobby.id), ...packet }));
-    if (data.length > 128 * 1024) return false;
+    if (data.length > (mode === 0 ? UNRELIABLE_LIMIT : 128 * 1024)) return false;
     let sent = true;
-    for (const id of this.memberIds()) if (id !== this.id) sent = this.client.networking.sendP2PPacket(BigInt(id), 2, data) && sent;
+    for (const id of this.memberIds()) if (id !== this.id) sent = this.client.networking.sendP2PPacket(BigInt(id), mode, data) && sent;
     return sent;
   }
-  sendData(payload) { if (this.match && !this.send({ type: 'data', session: this.match.session, payload })) this.emit({ type: 'error', message: '联机数据发送失败，正在重试连接。' }); }
+  sendSnapshot(payload) {
+    const compressed = deflateRawSync(Buffer.from(JSON.stringify(payload)));
+    const total = Math.ceil(compressed.length / SNAPSHOT_CHUNK);
+    if (!total || total > 64) return false;
+    let sent = true;
+    for (let index = 0; index < total; index++) sent = this.send({ type: 'snapshot', session: this.match.session,
+      snapshot: payload.seq, index, total, data: compressed.subarray(index * SNAPSHOT_CHUNK, (index + 1) * SNAPSHOT_CHUNK).toString('base64') }, 0) && sent;
+    return sent;
+  }
+  sendData(payload) {
+    if (!this.match) return;
+    // 高频输入与世界快照允许丢弃，避免可靠队列在网络抖动时堆积旧画面。
+    // 射击、换弹、切枪、伤害反馈和房间控制仍走可靠通道。
+    const sent = payload?.type === 'world' ? this.sendSnapshot(payload)
+      : this.send({ type: 'data', session: this.match.session, payload }, payload?.type === 'input' ? 0 : 2);
+    if (!sent) this.emit({ type: 'error', message: '联机数据发送失败，正在重试连接。' });
+  }
+  receiveSnapshot(from, packet) {
+    if (!this.match || packet.session !== this.match.session || !Number.isSafeInteger(packet.snapshot) || packet.snapshot < 0
+      || !Number.isInteger(packet.index) || !Number.isInteger(packet.total) || packet.total < 1 || packet.total > 64
+      || packet.index < 0 || packet.index >= packet.total || typeof packet.data !== 'string' || packet.data.length > 1000) return;
+    const key = `${from}:${packet.snapshot}`;
+    let entry = this.snapshots.get(key);
+    if (!entry) { entry = { at: Date.now(), parts: Array(packet.total), received: 0 }; this.snapshots.set(key, entry); }
+    if (entry.parts.length !== packet.total || entry.parts[packet.index] !== undefined) return;
+    entry.parts[packet.index] = packet.data; entry.received++;
+    for (const [id, item] of this.snapshots) if (Date.now() - item.at > 2000) this.snapshots.delete(id);
+    if (entry.received !== packet.total) return;
+    this.snapshots.delete(key);
+    try {
+      const data = JSON.parse(inflateRawSync(Buffer.concat(entry.parts.map(part => Buffer.from(part, 'base64'))), { maxOutputLength: 128 * 1024 }).toString('utf8'));
+      for (const id of this.snapshots.keys()) if (id.startsWith(`${from}:`) && Number(id.slice(id.indexOf(':') + 1)) < packet.snapshot) this.snapshots.delete(id);
+      this.emit({ type: 'packet', from, data });
+    } catch { /* 丢弃缺损、超限或无法解压的快照，下一帧会自然替代。 */ }
+  }
   refresh() {
     try {
       if (!this.lobby) return;
@@ -111,14 +148,15 @@ class SteamRooms {
           this.sendControl('go', this.match.session); this.emit({ type: 'start', match: this.match }); this.publish();
         } else if (p.type === 'go' && this.pending?.host === from && p.payload === this.pending.session) {
           this.match = this.pending; this.pending = null; this.emit({ type: 'start', match: this.match }); this.publish();
-        } else if (p.type === 'data' && this.match && p.session === this.match.session) this.emit({ type: 'packet', from, data: p.payload });
+        } else if (p.type === 'snapshot') this.receiveSnapshot(from, p);
+        else if (p.type === 'data' && this.match && p.session === this.match.session) this.emit({ type: 'packet', from, data: p.payload });
       }
     } catch (error) { this.emit({ type: 'error', message: `Steam 接收失败：${error.message}` }); }
   }
   dispose() {
     clearInterval(this.timer); clearInterval(this.roomTimer);
     try { this.leave(); } catch { /* 退出时 Steam 可能先关闭。 */ }
-    this.handles.forEach(h => h.disconnect());
+    this.snapshots.clear(); this.handles.forEach(h => h.disconnect());
   }
 }
 

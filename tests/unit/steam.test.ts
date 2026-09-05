@@ -10,14 +10,14 @@ function network() {
     mergeFullData: (next: Record<string, string>) => { Object.assign(data, next); return true; },
     getMembers: () => members.map(steamId64 => ({ steamId64 })), getMemberCount: () => BigInt(members.length),
     getOwner: () => ({ steamId64: members[0] }), setJoinable: vi.fn(() => true), leave: vi.fn() };
-  const queues = new Map<string, { data: Buffer; steamId: { steamId64: bigint } }[]>([['111', []], ['222', []]]);
+  const queues = new Map<string, { data: Buffer; steamId: { steamId64: bigint }; mode?: number }[]>([['111', []], ['222', []]]);
   const events: Record<string, any[]> = { '111': [], '222': [] };
   const services = ['111', '222'].map(id => {
     const queue = queues.get(id)!;
     const client = { localplayer: { getSteamId: () => ({ steamId64: BigInt(id) }), getName: () => id },
       callback: { register: vi.fn(() => ({ disconnect: vi.fn() })) },
       matchmaking: { createLobby: vi.fn(async () => lobby), getLobbies: vi.fn(async () => [lobby]), joinLobby: vi.fn(async () => { members.push(BigInt(id)); return lobby; }) },
-      networking: { acceptP2PSession: vi.fn(), sendP2PPacket: vi.fn((peer: bigint, _mode: number, data: Buffer) => { queues.get(String(peer))!.push({ data, steamId: { steamId64: BigInt(id) } }); return true; }),
+      networking: { acceptP2PSession: vi.fn(), sendP2PPacket: vi.fn((peer: bigint, mode: number, data: Buffer) => { queues.get(String(peer))!.push({ data, mode, steamId: { steamId64: BigInt(id) } }); return true; }),
         isP2PPacketAvailable: () => queue[0]?.data.length ?? 0, readP2PPacket: () => queue.shift()! } };
     const native = { filter: vi.fn(), close: vi.fn() };
     return new SteamRooms(client, native, (event: unknown) => events[id].push(event));
@@ -35,7 +35,7 @@ describe('Steam 房间与 P2P 协议', () => {
     const { host, guest, lobby } = await setup(false);
     expect(host.client.matchmaking.createLobby).toHaveBeenCalledWith(2, 2);
     expect((await guest.search())[0].name).toBe('合作哨站');
-    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v1');
+    expect(guest.native.filter).toHaveBeenCalledWith('xcymm3.undead-survivor', 'coop-v2');
     await guest.join('999'); expect(await guest.search()).toEqual([]);
     guest.leave(); lobby.setData('protocol', 'old');
     await expect(guest.join('999')).rejects.toThrow('不兼容');
@@ -51,6 +51,21 @@ describe('Steam 房间与 P2P 协议', () => {
     guest.sendData({ type: 'fire', seq: 1 }); host.poll();
     expect(events['111'].at(-1)).toEqual({ type: 'packet', from: '222', data: { type: 'fire', seq: 1 } });
   });
+  it('输入和压缩世界快照不进入可靠积压队列，关键操作保持可靠', async () => {
+    const { host, guest, events, queues } = await setup(); host.start(); guest.poll(); host.poll(); guest.poll();
+    guest.sendData({ type: 'input', seq: 2, keys: ['KeyW'], yaw: 0, pitch: 0, jump: 0 });
+    expect(queues.get('111')!.at(-1)?.mode).toBe(0); host.poll();
+    guest.sendData({ type: 'reload', seq: 3, index: 0 });
+    expect(queues.get('111')!.at(-1)?.mode).toBe(2); host.poll();
+    const world = { type: 'world', seq: 9, inputAck: 2, inputKeys: ['KeyW'], players: [],
+      zombies: Array.from({ length: 80 }, (_, id) => ({ id, x: id % 20, z: -id / 3, health: 100, armorHealth: 0 })),
+      wave: 8, wavesCleared: 7, waveSpawned: 51, totalSpawned: 180, intermission: 0, elapsed: 90, kills: 129, failed: false };
+    guest.sendData(world);
+    expect(queues.get('111')!.length).toBeGreaterThan(0);
+    expect(queues.get('111')!.every(packet => packet.mode === 0 && packet.data.length <= 1150)).toBe(true);
+    host.poll();
+    expect(events['111'].at(-1)).toEqual({ type: 'packet', from: '222', data: JSON.parse(JSON.stringify(world)) });
+  });
   it('搜索尚未加入的大厅时不读取受限的成员 ID 或房主信息', async () => {
     const { guest, lobby } = await setup(false);
     vi.spyOn(lobby, 'getMembers').mockImplementation(() => { throw Error('尚未加入大厅'); });
@@ -61,7 +76,7 @@ describe('Steam 房间与 P2P 协议', () => {
     const { host, guest, events, queues } = await setup(); host.start(); guest.poll(); host.poll(); guest.poll();
     const baseline = events['111'].length;
     for (const [from, game, session] of [['333', 'xcymm3.undead-survivor', host.match.session], ['222', 'another-game', host.match.session], ['222', 'xcymm3.undead-survivor', 'old-session']]) {
-      queues.get('111')!.push({ steamId: { steamId64: BigInt(from) }, data: Buffer.from(JSON.stringify({ game, version: 'coop-v1', room: '999', type: 'data', session, payload: { health: 0 } })) });
+      queues.get('111')!.push({ steamId: { steamId64: BigInt(from) }, data: Buffer.from(JSON.stringify({ game, version: 'coop-v2', room: '999', type: 'data', session, payload: { health: 0 } })) });
     }
     host.poll(); expect(events['111']).toHaveLength(baseline);
   });

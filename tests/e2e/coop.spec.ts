@@ -28,7 +28,12 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
           room!.playing = true;
           await Promise.all(pages.map((_, index) => deliver(index, { type: 'start', match: { session: 'local-test', host: '111', local: ids[index], members: room!.members } })));
         }
-        if (method === 'send') await deliver(1 - i, { type: 'packet', from: ids[i], data: value });
+        if (method === 'send') {
+          const packet = value as { type?: string; seq?: number };
+          // 模拟公网往返延迟和快照抖动，验证队员不会因迟到的权威坐标被反复拉回。
+          const latency = packet.type === 'world' ? 120 + ((packet.seq ?? 0) % 3) * 35 : packet.type === 'input' ? 80 : 30;
+          setTimeout(() => { if (!closing) void deliver(1 - i, { type: 'packet', from: ids[i], data: value }).catch(() => {}); }, latency);
+        }
         if (method === 'leave') { room = null; await publish(); }
       });
       await pages[i].addInitScript(() => {
@@ -62,6 +67,16 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
       if ((await snapshot(page)).phase === 'paused') await page.getByRole('button', { name: '返回战斗' }).click();
       await capture(page);
     }
+    await control(guest);
+    await guest.keyboard.down('w');
+    const movement = await guest.evaluate(async () => {
+      const positions: number[] = [], deadline = performance.now() + 900;
+      while (performance.now() < deadline) { positions.push(window.__undeadTower!.snapshot().player.z); await new Promise(requestAnimationFrame); }
+      return positions;
+    });
+    await guest.keyboard.up('w');
+    expect(movement.at(-1)!).toBeLessThan(movement[0] - 2.5);
+    expect(Math.max(...movement.slice(1).map((z, i) => z - movement[i]))).toBeLessThan(.12);
     async function fight(page: Page, killGoal: number) {
       await control(page);
       return page.evaluate(async goal => {

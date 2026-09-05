@@ -135,8 +135,8 @@ export class Game {
     this.height = Math.max(1, this.host.clientHeight);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
-    // 默认最多渲染 1080p，避免高 DPI / 超宽屏无上限占用显存。
-    const ratio = Math.min(devicePixelRatio, 1, 1920 / this.width, 1080 / this.height);
+    // 最高绘制到 1440p；4K 客户端不再把 1080p 画面放大两倍，同时限制超高 DPI 的显存开销。
+    const ratio = Math.min(devicePixelRatio, 1.5, 2560 / this.width, 1440 / this.height);
     this.renderer.setPixelRatio(ratio * (this.pixelated ? 0.68 : 1));
     this.renderer.setSize(this.width, this.height);
     this.dirty = true;
@@ -455,11 +455,15 @@ export class Game {
     } else {
       coop.sendInput(keys, this.view.x, this.view.y, this.jumpSequence, delta);
       if (local.health > 0) this.playerMotion.update(this.encounter.player, this.view.x, keys, delta, this.navigation, this.encounter.zombies);
+      coop.smoothWorld(delta);
       const discrepancy = Math.hypot(this.encounter.player.x - local.x, this.encounter.player.z - local.z);
-      if (discrepancy > 1 || !keys.size) {
-        const blend = discrepancy > 2 ? 1 : 1 - Math.exp(-delta * 12);
-        this.encounter.player.x += (local.x - this.encounter.player.x) * blend;
-        this.encounter.player.z += (local.z - this.encounter.player.z) * blend;
+      const settled = !keys.size && !coop.authoritativeKeys.size;
+      // 移动中的权威坐标天然落后约一个往返延迟，不能把它当成错误直接瞬移回去。
+      // 双端都已停下时快速收敛；确有大幅分歧时只做限速校正，避免画面拉扯。
+      if (discrepancy > .08 && (settled || discrepancy > 3.5)) {
+        const distance = Math.min(discrepancy, (settled ? 4 : .75) * delta);
+        this.encounter.player.x += (local.x - this.encounter.player.x) / discrepancy * distance;
+        this.encounter.player.z += (local.z - this.encounter.player.z) / discrepancy * distance;
       }
       for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); this.audio.tone(950, 450, .07, .025); }
     }

@@ -15,12 +15,16 @@ export class CoopSession {
   lastInputAt = 0;
   lastPacketAt = performance.now();
   private commandSeq = -1;
+  private inputSeq = -1;
   private worldSeq = -1;
   private jump = 0;
   private outgoing = 0;
   private inputTimer = 0;
   private worldTimer = 0;
   private commands: Command[] = [];
+  private worldReceivedAt = 0;
+  private zombieTracks = new Map<number, { fromX: number; fromZ: number; fromHeading: number; toX: number; toZ: number; toHeading: number; elapsed: number; duration: number }>();
+  authoritativeKeys = new Set<string>();
   feedback: { head: boolean; killed: boolean; armorBroken: boolean }[] = [];
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
     private send: (data: unknown) => void) {
@@ -50,21 +54,55 @@ export class CoopSession {
       return;
     }
     if (this.host) {
-      if (!validCommand(data) || data.seq <= this.commandSeq) return;
-      this.commandSeq = data.seq; this.lastPacketAt = performance.now();
+      if (!validCommand(data)) return;
       if (data.type === 'input') {
+        if (data.seq <= this.inputSeq) return;
+        this.inputSeq = data.seq; this.lastPacketAt = performance.now();
         this.keys = new Set(data.keys); this.remote.yaw = data.yaw; this.remote.pitch = data.pitch;
         this.lastInputAt = performance.now();
         if (data.jump > this.jump && this.remote.health > 0) this.remoteMotion.jump(); this.jump = data.jump;
-      } else if (this.commands.length < 32) this.commands.push(data);
+      } else {
+        // 高频输入与可靠操作使用不同 Steam 通道，二者允许交错到达，分别判重。
+        if (data.seq <= this.commandSeq) return;
+        this.commandSeq = data.seq; this.lastPacketAt = performance.now();
+        if (this.commands.length < 32) this.commands.push(data);
+      }
     } else {
       if (!validWorld(data, this.match.members) || data.seq <= this.worldSeq) return;
       this.worldSeq = data.seq; this.lastPacketAt = performance.now();
       for (const p of data.players) Object.assign(this.players.find(v => v.id === p.id)!, p);
       const e = this.encounter;
-      e.zombies = data.zombies.map(z => ({ ...z }));
+      const now = performance.now();
+      const duration = this.worldReceivedAt ? Math.max(.06, Math.min(.2, (now - this.worldReceivedAt) / 1000)) : .1;
+      this.worldReceivedAt = now; this.authoritativeKeys = new Set(data.inputKeys);
+      const current = new Map(e.zombies.map(z => [z.id, z]));
+      const nextIds = new Set(data.zombies.map(z => z.id));
+      e.zombies = data.zombies.map(incoming => {
+        const zombie = current.get(incoming.id);
+        if (!zombie) { this.zombieTracks.delete(incoming.id); return { ...incoming }; }
+        const fromX = zombie.x, fromZ = zombie.z, fromHeading = zombie.heading ?? incoming.heading ?? 0;
+        Object.assign(zombie, incoming); zombie.x = fromX; zombie.z = fromZ; zombie.heading = fromHeading;
+        this.zombieTracks.set(zombie.id, { fromX, fromZ, fromHeading, toX: incoming.x, toZ: incoming.z,
+          toHeading: incoming.heading ?? fromHeading, elapsed: 0, duration });
+        return zombie;
+      });
+      for (const id of this.zombieTracks.keys()) if (!nextIds.has(id)) this.zombieTracks.delete(id);
       e.wave = data.wave; e.wavesCleared = data.wavesCleared; e.waveSpawned = data.waveSpawned;
-      e.totalSpawned = data.totalSpawned; e.intermission = data.intermission; e.elapsed = data.elapsed; e.kills = data.kills; e.failed = data.failed;
+      e.totalSpawned = data.totalSpawned; e.intermission = data.intermission;
+      e.elapsed = data.failed ? data.elapsed : Math.max(e.elapsed, data.elapsed); e.kills = data.kills; e.failed = data.failed;
+    }
+  }
+  smoothWorld(delta: number) {
+    if (this.host || delta <= 0) return;
+    if (!this.encounter.failed) this.encounter.elapsed += delta;
+    for (const zombie of this.encounter.zombies) {
+      const track = this.zombieTracks.get(zombie.id); if (!track) continue;
+      track.elapsed = Math.min(track.duration, track.elapsed + delta);
+      const t = track.elapsed / track.duration;
+      zombie.x = track.fromX + (track.toX - track.fromX) * t;
+      zombie.z = track.fromZ + (track.toZ - track.fromZ) * t;
+      const turn = Math.atan2(Math.sin(track.toHeading - track.fromHeading), Math.cos(track.toHeading - track.fromHeading));
+      zombie.heading = track.fromHeading + turn * t;
     }
   }
   advanceRemote(delta: number, navigation: Navigation, fire: (pawn: Pawn, arsenal: Arsenal) => void) {
@@ -93,7 +131,7 @@ export class CoopSession {
     if (!this.host) return;
     this.worldTimer += delta; if (!force && this.worldTimer < .1) return; this.worldTimer = 0;
     const e = this.encounter;
-    const state: WorldState = { type: 'world', seq: ++this.outgoing, players: this.players.map(p => ({ ...p })),
+    const state: WorldState = { type: 'world', seq: ++this.outgoing, inputAck: this.inputSeq, inputKeys: [...this.keys], players: this.players.map(p => ({ ...p })),
       zombies: e.zombies.map(z => ({ ...z })), wave: e.wave, wavesCleared: e.wavesCleared, waveSpawned: e.waveSpawned,
       totalSpawned: e.totalSpawned, intermission: e.intermission, elapsed: e.elapsed, kills: e.kills, failed: e.failed };
     this.send(state);

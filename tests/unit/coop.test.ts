@@ -59,12 +59,27 @@ describe('双人权威模拟', () => {
     for (const z of a.zombies) a.hit(z.id, true, 1000);
     a.update(.05, () => null); host.broadcast(0, true);
     const first = packets[0] as WorldState; expect(validWorld(first, members)).toBe(true);
+    expect(first.inputAck).toBe(-1); expect(first.inputKeys).toEqual([]);
     guest.receive('111', first); expect(b.kills).toBe(9); expect(b.wavesCleared).toBe(1);
     a.update(5, () => null); host.local.health = 0; host.remote.health = 0; a.update(.05, () => null);
     host.broadcast(0, true); guest.receive('111', packets[1]); guest.receive('111', first);
     expect(b.wave).toBe(2); expect(b.failed).toBe(true); expect(guest.players.every(p => p.health === 0)).toBe(true);
     expect(validWorld({ ...first, players: [first.players[0], first.players[0]] }, members)).toBe(false);
     expect(validWorld({ ...first, intermission: -1 }, members)).toBe(false);
+    expect(validWorld({ ...first, inputKeys: ['Teleport'] }, members)).toBe(false);
+  });
+  it('队员在快照之间连续插值僵尸位置与朝向', () => {
+    const { guest, b } = pair();
+    const base: WorldState = { type: 'world', seq: 1, inputAck: 0, inputKeys: [], players: guest.players.map(p => ({ ...p })),
+      zombies: [{ id: 7, kind: 'normal', x: 0, z: -10, health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0, heading: 3 }],
+      wave: 1, wavesCleared: 0, waveSpawned: 1, totalSpawned: 1, intermission: 0, elapsed: 1, kills: 0, failed: false };
+    guest.receive('111', base);
+    guest.receive('111', { ...base, seq: 2, elapsed: 1.1, zombies: [{ ...base.zombies[0], x: 1, z: -11, heading: -3 }] });
+    expect(b.zombies[0]).toMatchObject({ x: 0, z: -10, heading: 3 });
+    guest.smoothWorld(.05);
+    expect(b.zombies[0].x).toBeGreaterThan(0); expect(b.zombies[0].x).toBeLessThan(1);
+    expect(Math.abs(b.zombies[0].heading! - 3)).toBeLessThan(.25);
+    guest.smoothWorld(.1); expect(b.zombies[0]).toMatchObject({ x: 1, z: -11 });
   });
   it('死亡队友的射击指令无法造成伤害', () => {
     const { host, guest } = pair(); let fired = 0;
@@ -81,6 +96,15 @@ describe('双人权威模拟', () => {
     host.advanceRemote(.01, nav, shoot); expect(host.remoteArsenal.shots).toBe(1);
     host.advanceRemote(.2, nav, shoot); expect(host.remoteArsenal.shots).toBe(2);
     host.advanceRemote(.2, nav, shoot); expect(host.remoteArsenal.shots).toBe(3);
+  });
+  it('不可靠输入越过可靠操作时分别判重，避免丢失开枪指令', () => {
+    const { host } = pair(); let fired = 0;
+    host.receive('222', { type: 'input', seq: 5, keys: ['KeyW'], yaw: 0, pitch: 0, jump: 0 });
+    host.receive('222', { type: 'fire', seq: 4, yaw: 0, pitch: 0 });
+    host.advanceRemote(.05, nav, () => { fired++; });
+    expect(fired).toBe(1); expect(host.keys.has('KeyW')).toBe(true);
+    host.receive('222', { type: 'fire', seq: 4, yaw: 1, pitch: 0 });
+    host.advanceRemote(.2, nav, () => { fired++; }); expect(fired).toBe(1);
   });
   it('延迟射击按开枪时方向判定，但不能覆盖玩家最新的转向与移动方向', () => {
     const { host, guest } = pair(); const shotAngles: number[] = [];
