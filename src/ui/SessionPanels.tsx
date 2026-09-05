@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ARMOR_SPAWNS, DIFFICULTIES, FIXED_DIFFICULTY, ZOMBIE_TYPES } from '../game/config';
+import { DIFFICULTIES, FIXED_DIFFICULTY, ZOMBIE_TYPES } from '../game/config';
 import type { Difficulty, GameMode, GameSnapshot, RunResult } from '../game/config';
 import { formatDuration } from '../game/leaderboard';
 import type { PersonalRecord } from '../game/leaderboard';
@@ -14,7 +14,7 @@ export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, onMultip
       <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}><span className="mode-radio" /><span>正式模式<small>固定波次 · 数量与移速递增</small></span><b>02</b></button>
     </div>
     <div className="deployment-detail">
-      {mode === 'survival' ? <><span className="practice-note">困难难度 · 波次生存</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。<br />每 {ARMOR_SPAWNS.normalPerCone} 普 → 1 路障；每 {ARMOR_SPAWNS.conesPerBucket} 路障 → 1 铁桶。<br /><strong>清完一波休整 5 秒。空格跳河，落水立即失败。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />靶子不攻击；落水仍会失败，不计入排行榜。</p></>}
+      {mode === 'survival' ? <><span className="practice-note">困难难度 · 四阶尸群</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。前三波仅有一阶敌人，此后逐步加入小鬼、持盾、狂暴、巨人与橄榄球僵尸。<br /><strong>第 10 波起每波至少出现一只橄榄球僵尸。清完一波休整 5 秒。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />靶子不攻击；落水仍会失败，不计入排行榜。</p></>}
     </div>
     <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}<small>{mode === 'practice' ? 'ENTER THE RANGE' : 'HOLD THE LINE'}</small></span><span aria-hidden="true">→</span></button>
     <button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>2～4 人生存 / STEAM P2P →</span></button>

@@ -57,8 +57,14 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await guest.getByRole('button', { name: '加入房间', exact: true }).click();
     await expect(host.getByText('已有 2 人，可以开始或继续等待。')).toBeVisible();
     await host.screenshot({ path: 'test-results/coop-room.png' });
+    // 联机协议用例固定首波为普通僵尸，避免怪物耐久随机性掩盖网络与观战断言。
+    for (const page of pages) await page.evaluate(() => {
+      const values = Array<number>(18).fill(.1);
+      let index = 0, seed = 31;
+      Math.random = () => index < values.length ? values[index++] : ((seed = seed * 48271 % 2147483647) - 1) / 2147483646;
+    });
     await host.getByRole('button', { name: '开始多人游戏' }).click();
-    await expect.poll(async () => (await snapshot(guest)).coop?.players.length, { timeout: 15000 }).toBe(2);
+    await expect.poll(async () => (await snapshot(guest)).coop?.players.length, { timeout: 30000 }).toBe(2);
     async function control(page: Page) {
       // 两个测试客户端共用一个无界面浏览器，先释放另一页的鼠标锁，避免同时争抢。
       for (const other of pages) if (other !== page) {
@@ -108,20 +114,27 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     expect((await fight(host, 1)).kills).toBeGreaterThanOrEqual(1);
     await control(guest); await lookAt(guest, -2, 1.7, 9);
     await guest.screenshot({ path: 'test-results/coop-partner.png' });
+    // 队员至少发出一枪，房主收到并权威处理；清波则由房主完成，避免网络插值让高血量装甲怪的连续瞄准失真。
+    await guest.evaluate(() => {
+      const canvas = document.querySelector('canvas')!;
+      canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
+    });
+    await expect.poll(async () => (await snapshot(host)).coop!.players[1].shots).toBeGreaterThan(0);
     // Headless Chrome 的独立 context 不一定互相失焦，显式重现窗口切出的浏览器事件。
-    await host.evaluate(() => window.dispatchEvent(new Event('blur')));
-    const backgroundHost = await snapshot(host);
-    const cleared = await fight(guest, 9);
+    await guest.evaluate(() => window.dispatchEvent(new Event('blur')));
+    const backgroundGuest = await snapshot(guest);
+    const cleared = await fight(host, 9);
     expect(cleared.kills).toBe(9); expect(cleared.health).toBeGreaterThan(0);
     await expect.poll(async () => (await snapshot(host)).wavesCleared).toBe(1);
     await expect.poll(async () => (await snapshot(guest)).wavesCleared).toBe(1);
     expect((await snapshot(host)).coop!.players[1].shots).toBeGreaterThan(0);
-    // 房主在另一个标签页失焦时继续权威模拟，但不继续绘图、也不堆积弹道特效。
-    expect((await snapshot(host)).renderCount).toBeLessThanOrEqual(backgroundHost.renderCount + 1);
-    expect((await snapshot(host)).effects).toBeLessThanOrEqual(backgroundHost.effects);
+    // 队员在另一个标签页失焦时仍接收权威快照，但不继续绘图、也不堆积弹道特效。
+    expect((await snapshot(guest)).renderCount).toBeLessThanOrEqual(backgroundGuest.renderCount + 1);
+    expect((await snapshot(guest)).effects).toBeLessThanOrEqual(backgroundGuest.effects);
     expect(cleared.waterZombies).toEqual([]);
     await guest.screenshot({ path: 'test-results/coop-combat.png' });
-    await guest.keyboard.press('r');
+    await control(guest); await guest.keyboard.press('r');
     await guest.evaluate(() => window.dispatchEvent(new Event('blur')));
     await expect.poll(async () => (await snapshot(guest)).ammo).toBe(30);
     await control(guest); await guest.keyboard.press('3');

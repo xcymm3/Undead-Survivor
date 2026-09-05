@@ -563,7 +563,7 @@ export class Game {
       this.raycaster.set(muzzle, direction); const hit = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0];
       const target = this.zombieField.decode(hit);
       if (target) {
-        const damage = this.encounter.hit(target.id, target.head, gun.damage * (target.head ? 2 : 1));
+        const damage = this.encounter.hit(target.id, target.head, gun.damage * (target.head ? 2 : 1), target.armor ?? true);
         if (damage) {
           if (!this.background && damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(target.id, damage.armorHit), direction);
           if (!this.background && damage.killed && hit) this.blood.burst(hit.point, direction, target.head);
@@ -659,7 +659,7 @@ export class Game {
       if (pellet === 0) this.lastShot = { muzzle: muzzle.toArray(), direction: direction.toArray(), aimPoint: this.aimPoint.toArray(), impact: end.toArray(), hitTarget: targetId ?? null };
       if (targetHit && (!this.coop || this.coop.host)) {
         const head = targetHit.head;
-        const damage = this.encounter.hit(targetHit.id, head, definition.damage * (head ? 2 : 1))!;
+        const damage = this.encounter.hit(targetHit.id, head, definition.damage * (head ? 2 : 1), targetHit.armor ?? true)!;
         if (damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(targetHit.id, damage.armorHit), direction);
         // 立即同步外观与碰撞，避免同一帧继续命中已经脱落的护具。
         this.zombieField.sync(this.encounter);

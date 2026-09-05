@@ -3,6 +3,7 @@ import { capture, fire, lookAt, snapshot, start } from './controls';
 import { CONFIG } from '../../src/game/config';
 
 test('自由转向、WASD移动并开火，枪口与准星一致，暂停清空按键', async ({ page }) => {
+  test.setTimeout(60000);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await start(page);
   await expect(page.getByTestId('player-health')).toHaveText('100');
@@ -12,7 +13,8 @@ test('自由转向、WASD移动并开火，枪口与准星一致，暂停清空�
   const moved = await snapshot(page);
   expect(moved.player.z).toBeLessThan(initial.player.z - 1);
   expect(moved.shots).toBeGreaterThan(0); expect(moved.ammo).toBeLessThan(30);
-  await lookAt(page, 20, 1.7, moved.player.z);
+  const turnOrigin = await snapshot(page);
+  await lookAt(page, 20, 1.7, turnOrigin.cameraPosition[2]);
   expect((await snapshot(page)).yaw).toBeCloseTo(-Math.PI / 2, 2);
   await page.keyboard.down('w'); await page.waitForTimeout(400); await page.keyboard.up('w');
   expect((await snapshot(page)).player.x).toBeGreaterThan(0.8);

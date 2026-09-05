@@ -58,9 +58,19 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && typeof p.reloading === 'boolean' && finite(p.reloadProgress, 1) && p.reloadProgress >= 0 && typeof p.reloadEmpty === 'boolean'
       && isValidAppearance(p.appearance))
     && Array.isArray(s.zombies) && s.zombies.length <= 256 && s.zombies.every(z => z && typeof z === 'object') && new Set(s.zombies.map(z => z.id)).size === s.zombies.length
-    && s.zombies.every(z => Number.isSafeInteger(z.id) && z.id >= 0 && ['normal', 'cone', 'bucket'].includes(z.kind)
-      && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, 400) && z.health >= 0 && finite(z.armorHealth, 300)
-      && z.armorHealth >= 0 && finite(z.maxHealth, 400) && z.maxHealth > 0 && finite(z.downTime, 10) && z.downTime >= 0 && finite(z.bornAt, 1e8)
+    && s.zombies.every(z => Number.isSafeInteger(z.id) && z.id >= 0
+      && ['normal', 'cone', 'bucket', 'imp', 'shield', 'berserker', 'giant', 'football'].includes(z.kind)
+      && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, 2500) && z.health >= 0 && finite(z.armorHealth, 2000)
+      && z.armorHealth >= 0 && finite(z.maxHealth, 2500) && z.maxHealth > 0 && finite(z.downTime, 10) && z.downTime >= 0 && finite(z.bornAt, 1e8)
+      && (z.bodyHealth === undefined || finite(z.bodyHealth, 2000) && z.bodyHealth >= 0)
+      && (z.bodyHealth === undefined || Math.abs(z.bodyHealth + z.armorHealth - z.health) < 1e-6)
       && (z.attacking === undefined || typeof z.attacking === 'boolean')
+      && (z.attackTarget === undefined || typeof z.attackTarget === 'string' && z.attackTarget.length <= 128)
+      && (z.enraged === undefined || typeof z.enraged === 'boolean')
+      && (z.chargeAvoidRiver === undefined || typeof z.chargeAvoidRiver === 'boolean')
+      && (z.specialState === undefined || ['ready', 'windup', 'charging', 'stunned'].includes(z.specialState))
+      && (z.ragePause === undefined || finite(z.ragePause, 1) && z.ragePause >= 0)
+      && (z.specialRemaining === undefined || finite(z.specialRemaining, 2) && z.specialRemaining >= 0)
+      && (z.specialCooldown === undefined || finite(z.specialCooldown, 5) && z.specialCooldown >= 0)
       && (z.heading === undefined || finite(z.heading, 1e6)) && (z.attackTime === undefined || finite(z.attackTime, 2) && z.attackTime >= 0));
 }

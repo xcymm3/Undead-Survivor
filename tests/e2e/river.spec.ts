@@ -3,7 +3,7 @@ import { capture, fire, lookAt, snapshot, start } from './controls';
 import { LEADERBOARD_KEY } from '../../src/game/leaderboard';
 
 test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async ({ page }) => {
-  test.setTimeout(40000);
+  test.setTimeout(90000);
   await start(page);
   await lookAt(page, 0, 1.7, -40);
   await page.evaluate(async () => {

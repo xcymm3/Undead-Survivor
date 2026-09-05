@@ -6,7 +6,7 @@ import { ArmorEffects } from '../../src/game/armorEffects';
 
 describe('护甲脱落', () => {
   it('打掉护甲后本体存活、原护具碰撞消失，脱落模型飞起并回收', () => {
-    const encounter = new Encounter(); encounter.reset('survival', 'hard');
+    const encounter = new Encounter(() => .7); encounter.reset('survival', 'hard');
     encounter.update(6, () => ({ x: 0, z: -100 }));
     const target = encounter.zombies.find(z => z.kind === 'cone')!;
     encounter.zombies = [target]; target.x = 0; target.z = 0;

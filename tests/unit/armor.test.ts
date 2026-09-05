@@ -1,33 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { Raycaster, Vector3 } from 'three';
-import { WAVES, ZOMBIE_TYPES } from '../../src/game/config';
+import { ZOMBIE_TYPES } from '../../src/game/config';
 import type { Difficulty, ZombieKind } from '../../src/game/config';
 import { Encounter } from '../../src/game/encounter';
 import { ZombieField } from '../../src/game/zombies';
 
 const farSpawn = () => ({ x: 0, z: -10000 });
-const ordinaryBlock: ZombieKind[] = ['normal', 'normal', 'normal', 'cone'];
-
 describe('护甲僵尸规则', () => {
   for (const difficulty of ['easy', 'normal', 'hard'] as Difficulty[]) {
-    it(`${difficulty} 从开局使用固定出怪比例，重开清零计数`, () => {
-      const encounter = new Encounter(); encounter.reset('survival', difficulty);
-      const cycle = difficulty === 'easy' ? ['normal'] : difficulty === 'normal' ? ordinaryBlock : [...ordinaryBlock, ...ordinaryBlock, 'bucket'];
-      const observed: ZombieKind[] = [];
-      for (let wave = 1; wave <= 4; wave++) {
-        encounter.update(60, farSpawn);
-        const alive = encounter.zombies.filter(z => z.health > 0);
-        observed.push(...alive.map(z => z.kind));
-        if (wave === 1 && difficulty !== 'easy') expect(alive[3].bornAt).toBeLessThan(6);
-        if (wave === 1 && difficulty === 'hard') expect(alive[8].bornAt).toBeLessThan(11);
-        for (const z of alive) encounter.hit(z.id, true, 1000);
-        encounter.update(WAVES.rest + 0.05, farSpawn);
-      }
-      expect(observed.length).toBeGreaterThan(60);
-      observed.forEach((kind, index) => expect(kind).toBe(cycle[index % cycle.length]));
-      encounter.reset('survival', difficulty);
+    it(`${difficulty} 的第一波只使用允许的一阶怪物池`, () => {
+      const values = [.1, .1, .1, .7, .1, .95]; let index = 0;
+      const encounter = new Encounter(() => values[index++ % values.length]); encounter.reset('survival', difficulty);
       encounter.update(15, farSpawn);
-      expect(encounter.zombies.map(z => z.kind)).toEqual(Array.from({ length: 9 }, (_, index) => cycle[index % cycle.length]));
+      const kinds = encounter.zombies.map(z => z.kind);
+      expect(kinds).toHaveLength(9);
+      if (difficulty === 'easy') expect(new Set(kinds)).toEqual(new Set(['normal']));
+      else expect(kinds.every(kind => ['normal', 'cone', 'bucket'].includes(kind))).toBe(true);
     });
   }
 
