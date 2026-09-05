@@ -17,7 +17,10 @@ export async function launchPortable(executable, cwd, env) {
   const ports = await Promise.all([reservePort(), reservePort()]);
   await Promise.all(ports.map(({ server }) => new Promise(resolve => server.close(resolve))));
   const [mainPort, pagePort] = ports.map(p => p.port);
-  const child = spawn(executable, ['--silent', `--inspect=127.0.0.1:${mainPort}`, `--remote-debugging-port=${pagePort}`, '--remote-debugging-address=127.0.0.1'], {
+  // GitHub 的 Windows runner 没有可供 Electron 使用的实体 GPU，验收时显式启用 SwiftShader。
+  // 本机验收继续使用真实 GPU，避免软件渲染掩盖驱动或资源问题。
+  const graphicsArgs = env.CI === 'true' ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
+  const child = spawn(executable, ['--silent', ...graphicsArgs, `--inspect=127.0.0.1:${mainPort}`, `--remote-debugging-port=${pagePort}`, '--remote-debugging-address=127.0.0.1'], {
     cwd, env: { ...env, UNDEAD_SURVIVOR_SILENT: '1' }, windowsHide: true, stdio: 'ignore',
   });
   let launchError, socket, browser, sequence = 0;
