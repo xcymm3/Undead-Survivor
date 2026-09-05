@@ -180,5 +180,5 @@ export function createWorld(scene: THREE.Scene) {
   batchStaticBoxes(scene, new Set());
   const surfaces: THREE.Object3D[] = [];
   scene.traverse(obj => { if (obj instanceof THREE.Mesh && obj !== sunDisc && obj !== grasses) surfaces.push(obj); });
-  return { surfaces, obstacles };
+  return { surfaces, obstacles, sun };
 }

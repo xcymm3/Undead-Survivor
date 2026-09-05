@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { Game } from './game/Game';
 import { WEAPONS } from './game/weapons';
 import { DIFFICULTIES, FIXED_DIFFICULTY } from './game/config';
-import type { GameMode, GameSnapshot, RenderQuality } from './game/config';
+import type { GameMode, GameSnapshot } from './game/config';
+import { DEFAULT_GRAPHICS_SETTINGS } from './game/graphics';
+import type { AntiAliasing, EffectsQuality, FrameLimit, GraphicsPreset, ResolutionScale, ShadowQuality, ViewDistance } from './game/graphics';
 import { formatDuration, LeaderboardStore, personalRecord } from './game/leaderboard';
 import type { PersonalRecord } from './game/leaderboard';
 import { BreachOverlay, DeploymentPanel, LeaderboardTable, ResultPanel } from './ui/SessionPanels';
 import { MultiplayerPanel } from './ui/MultiplayerPanel';
 
-const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false, renderQuality: 'native', renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
+const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, breach: null, pixelated: false, graphicsPreset: 'quality', graphics: { ...DEFAULT_GRAPHICS_SETTINGS }, renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
+
+const graphicsPresets: { id: GraphicsPreset; label: string }[] = [
+  { id: 'ultra-performance', label: '极致性能' }, { id: 'performance', label: '性能' }, { id: 'balanced', label: '平衡' }, { id: 'quality', label: '画质' }, { id: 'ultra-quality', label: '极致画质' },
+];
 
 function Icon({ name, size = 18 }: { name: 'tower' | 'aim' | 'sound' | 'mute' | 'settings' | 'expand' | 'pause' | 'arrow' | 'close'; size?: number }) {
   const paths = {
@@ -183,14 +189,26 @@ export function App() {
       <p className="settings-intro">困难难度 · 本机前 10 名</p><LeaderboardTable entries={entries} difficulty={FIXED_DIFFICULTY} /><p className="board-footnote">按已清完的波数排名，未清完的一波不计入。<br />成绩保存在当前浏览器，清除网站数据会移除纪录。</p>
     </dialog>
 
-    <dialog ref={dialog} className="settings-dialog" aria-labelledby="settings-title" onCancel={event => { event.preventDefault(); event.stopPropagation(); closeSettings(); }} onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}>
+    <dialog ref={dialog} className="settings-dialog graphics-settings-dialog" aria-labelledby="settings-title" onCancel={event => { event.preventDefault(); event.stopPropagation(); closeSettings(); }} onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}>
       <div className="dialog-heading"><div><span className="label">FIELD PREFERENCES</span><h2 id="settings-title">哨站设置</h2></div><button className="icon-button" onClick={closeSettings} aria-label="关闭设置"><Icon name="close" /></button></div>
       <p className="settings-intro">鼠标控制自由视角，准星保持在屏幕中心。</p>
       <div className="view-limits"><Icon name="aim" /><p>水平 360°<span>垂直 ±85°</span><small>WASD 移动，空格跳跃。点击捕获鼠标，ESC 暂停。</small></p></div>
       <label className="toggle-row"><span>游戏声音<small>射击、护甲、死亡与低音量背景音乐</small></span><input type="checkbox" checked={state.sound} onChange={event => game.current?.setSound(event.target.checked)} /><i /></label>
       <div className="volume-control"><label htmlFor="volume">总音量 <b>{Math.round(state.volume * 100)}%{!state.sound && ' · 已静音'}</b></label><input id="volume" type="range" min="0" max="100" step="1" value={Math.round(state.volume * 100)} onChange={event => game.current?.setVolume(Number(event.target.value) / 100)} /><small>自动保存音量与静音设置</small></div>
-      <label className="quality-row"><span>渲染清晰度<small>{state.renderResolution.width} × {state.renderResolution.height} · {state.fps} FPS<br />GPU：{state.renderResolution.gpu}{/SwiftShader|llvmpipe|software/i.test(state.renderResolution.gpu) && <strong>检测到软件渲染，请开启显卡硬件加速。</strong>}</small></span><select aria-label="渲染清晰度" value={state.renderQuality} onChange={event => game.current?.setRenderQuality(event.target.value as RenderQuality)}><option value="native">原生（最高 4K）</option><option value="balanced">平衡（最高 1440p）</option><option value="performance">性能（最高 1080p）</option></select></label>
-      <label className="toggle-row"><span>粗颗粒像素<small>降低渲染分辨率，保留清晰的界面</small></span><input type="checkbox" checked={state.pixelated} onChange={event => game.current?.setPixelated(event.target.checked)} /><i /></label>
+      <section className="graphics-panel" aria-labelledby="graphics-title">
+        <div className="graphics-heading"><div><span className="label">GRAPHICS QUALITY</span><h3 id="graphics-title">画质设置</h3></div><output>当前：{state.graphicsPreset === 'custom' ? '自定义' : graphicsPresets.find(item => item.id === state.graphicsPreset)?.label}</output></div>
+        <div className="quality-presets" role="group" aria-label="画质预设">{graphicsPresets.map(preset => <button key={preset.id} type="button" aria-pressed={state.graphicsPreset === preset.id} onClick={() => game.current?.applyGraphicsPreset(preset.id)}>{preset.label}</button>)}</div>
+        <div className="render-status"><span>实际渲染 <b>{state.renderResolution.width} × {state.renderResolution.height}</b></span><span><b>{state.fps}</b> FPS</span><small>GPU：{state.renderResolution.gpu}{/SwiftShader|llvmpipe|software/i.test(state.renderResolution.gpu) && <strong>检测到软件渲染，请开启显卡硬件加速。</strong>}</small></div>
+        <div className="graphics-grid">
+          <label><span>渲染比例<small>相对屏幕原生像素</small></span><select aria-label="渲染比例" value={state.graphics.resolutionScale} onChange={event => game.current?.setGraphicsOption('resolutionScale', Number(event.target.value) as ResolutionScale)}><option value="0.5">50%</option><option value="0.67">67%</option><option value="0.75">75%</option><option value="1">100% 原生</option></select></label>
+          <label><span>抗锯齿<small>平滑物体边缘</small></span><select aria-label="抗锯齿" value={state.graphics.antiAliasing} onChange={event => game.current?.setGraphicsOption('antiAliasing', event.target.value as AntiAliasing)}><option value="off">关闭</option><option value="fxaa">FXAA · 快速</option><option value="smaa">SMAA · 精细</option></select></label>
+          <label><span>阴影质量<small>精度与更新速度</small></span><select aria-label="阴影质量" value={state.graphics.shadows} onChange={event => game.current?.setGraphicsOption('shadows', event.target.value as ShadowQuality)}><option value="off">关闭</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="ultra">极高</option></select></label>
+          <label><span>特效质量<small>血液与命中粒子数量</small></span><select aria-label="特效质量" value={state.graphics.effects} onChange={event => game.current?.setGraphicsOption('effects', event.target.value as EffectsQuality)}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+          <label><span>视距<small>远景与雾效范围</small></span><select aria-label="视距" value={state.graphics.viewDistance} onChange={event => game.current?.setGraphicsOption('viewDistance', event.target.value as ViewDistance)}><option value="near">近</option><option value="medium">中</option><option value="far">远</option></select></label>
+          <label><span>帧率上限<small>高帧率需要高刷新率屏幕</small></span><select aria-label="帧率上限" value={state.graphics.frameLimit} onChange={event => game.current?.setGraphicsOption('frameLimit', Number(event.target.value) as FrameLimit)}><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="0">不限</option></select></label>
+        </div>
+        <label className="toggle-row pixel-toggle"><span>粗颗粒像素<small>额外降低内部清晰度并使用硬边放大</small></span><input type="checkbox" checked={state.graphics.pixelated} onChange={event => game.current?.setPixelated(event.target.checked)} /><i /></label>
+      </section>
       <div className="settings-controls"><span><kbd>左键</kbd> 射击</span><span><kbd>R</kbd> 换弹</span><span><kbd>M</kbd> 静音</span><span><kbd>ESC</kbd> 暂停</span></div>
       <button className="start-button dialog-done" onClick={closeSettings}>返回哨站 <Icon name="arrow" /></button>
     </dialog>

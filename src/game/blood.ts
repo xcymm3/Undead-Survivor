@@ -19,6 +19,7 @@ export class BloodEffects extends THREE.InstancedMesh {
   private transform = new THREE.Object3D();
   private origin: number[] | null = null;
   private bursts = 0;
+  private density = 1;
 
   constructor() {
     super(cube, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, flatShading: true }), CAPACITY);
@@ -32,7 +33,7 @@ export class BloodEffects extends THREE.InstancedMesh {
   burst(position: THREE.Vector3, direction: THREE.Vector3, headshot: boolean) {
     this.origin = position.toArray();
     this.bursts++;
-    const amount = headshot ? 44 : 32;
+    const amount = Math.max(8, Math.round((headshot ? 44 : 32) * this.density));
     for (let i = 0; i < amount; i++) {
       const index = this.cursor;
       this.cursor = (this.cursor + 1) % CAPACITY;
@@ -92,7 +93,9 @@ export class BloodEffects extends THREE.InstancedMesh {
     this.bursts = 0;
   }
 
+  setDensity(density: number) { this.density = THREE.MathUtils.clamp(density, 0.25, 1); }
+
   diagnostics() {
-    return { active: this.droplets.filter(d => d.age < d.lifetime).length, capacity: CAPACITY, bursts: this.bursts, origin: this.origin?.slice() ?? null };
+    return { active: this.droplets.filter(d => d.age < d.lifetime).length, capacity: CAPACITY, density: this.density, bursts: this.bursts, origin: this.origin?.slice() ?? null };
   }
 }

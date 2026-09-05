@@ -1,3 +1,5 @@
+import type { ActiveGraphicsPreset, GraphicsSettings } from './graphics';
+
 export const CONFIG = {
   camera: { fov: 61, height: 1.7, sensitivity: 0.0022, pitchLimit: 85 * Math.PI / 180 },
   weapon: { capacity: 30, interval: 0.15, reloadDuration: 0.775, range: 180 },
@@ -9,7 +11,6 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 export const FIXED_DIFFICULTY = 'hard' satisfies Difficulty;
 export type ZombieKind = 'normal' | 'cone' | 'bucket';
 export type GamePhase = 'ready' | 'playing' | 'paused' | 'breaching' | 'failed';
-export type RenderQuality = 'native' | 'balanced' | 'performance';
 export const WAVES = { firstCount: 9, countGrowth: 6, firstSpeed: 1.4, speedGrowth: 0.15, spawnRate: 1, spawnGrowth: 0.2, rest: 5 } as const;
 export const ZOMBIE_TYPES = {
   normal: { label: '普通僵尸', health: 100, armor: 0 },
@@ -64,6 +65,7 @@ export interface GameSnapshot {
   volume: number;
   breach: { id: number; kind: ZombieKind; x: number; y: number; side: string } | null;
   pixelated: boolean;
-  renderQuality: RenderQuality;
+  graphicsPreset: ActiveGraphicsPreset;
+  graphics: GraphicsSettings;
   renderResolution: { width: number; height: number; scale: number; gpu: string };
 }
