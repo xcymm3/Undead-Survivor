@@ -1,4 +1,5 @@
 import type { Zombie } from '../game/encounter';
+import { ZOMBIE_TYPES } from '../game/config';
 import type { PlayerAppearance } from './appearance';
 import { isValidAppearance } from './appearance';
 
@@ -29,6 +30,9 @@ export interface WorldState {
 }
 export const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
 const finite = (n: unknown, max: number) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= max;
+const maximumZombieHealth = Math.max(...Object.values(ZOMBIE_TYPES).map(type => type.health));
+const maximumZombieArmor = Math.max(...Object.values(ZOMBIE_TYPES).map(type => type.armor));
+const maximumZombieBodyHealth = Math.max(...Object.values(ZOMBIE_TYPES).map(type => type.health - type.armor));
 export function validCommand(v: unknown): v is Command {
   if (!v || typeof v !== 'object') return false;
   const p = v as Command;
@@ -60,9 +64,9 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
     && Array.isArray(s.zombies) && s.zombies.length <= 256 && s.zombies.every(z => z && typeof z === 'object') && new Set(s.zombies.map(z => z.id)).size === s.zombies.length
     && s.zombies.every(z => Number.isSafeInteger(z.id) && z.id >= 0
       && ['normal', 'cone', 'bucket', 'imp', 'shield', 'berserker', 'giant', 'football'].includes(z.kind)
-      && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, 2500) && z.health >= 0 && finite(z.armorHealth, 2000)
-      && z.armorHealth >= 0 && finite(z.maxHealth, 2500) && z.maxHealth > 0 && finite(z.downTime, 10) && z.downTime >= 0 && finite(z.bornAt, 1e8)
-      && (z.bodyHealth === undefined || finite(z.bodyHealth, 2000) && z.bodyHealth >= 0)
+      && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, maximumZombieHealth) && z.health >= 0 && finite(z.armorHealth, maximumZombieArmor)
+      && z.armorHealth >= 0 && finite(z.maxHealth, maximumZombieHealth) && z.maxHealth > 0 && finite(z.downTime, 10) && z.downTime >= 0 && finite(z.bornAt, 1e8)
+      && (z.bodyHealth === undefined || finite(z.bodyHealth, maximumZombieBodyHealth) && z.bodyHealth >= 0)
       && (z.bodyHealth === undefined || Math.abs(z.bodyHealth + z.armorHealth - z.health) < 1e-6)
       && (z.attacking === undefined || typeof z.attacking === 'boolean')
       && (z.attackTarget === undefined || typeof z.attackTarget === 'string' && z.attackTarget.length <= 128)

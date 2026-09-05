@@ -21,8 +21,8 @@ describe('八类僵尸数值与阶位名单', () => {
     expect(ZOMBIE_TYPES).toMatchObject({
       normal: { health: 100, armor: 0, tier: 1 }, cone: { health: 200, armor: 100, tier: 1 },
       bucket: { health: 400, armor: 300, tier: 1 }, imp: { health: 300, armor: 0, tier: 2 },
-      shield: { health: 600, armor: 400, tier: 2 }, berserker: { health: 800, armor: 0, tier: 3 },
-      giant: { health: 2000, armor: 0, tier: 3 }, football: { health: 2500, armor: 2000, tier: 4 },
+      shield: { health: 600, armor: 400, tier: 2 }, berserker: { health: 1200, armor: 0, tier: 3 },
+      giant: { health: 2000, armor: 0, tier: 3 }, football: { health: 3750, armor: 2000, tier: 4 },
     });
   });
 
@@ -38,14 +38,17 @@ describe('八类僵尸数值与阶位名单', () => {
     expect(tierWeights(100)).toEqual([.60, .28, .10, .03]);
   });
 
-  it('前三波只有一阶；第十波开始按概率自然抽取四阶', () => {
+  it('前三波只有一阶；第10～12波在概率抽取外保底一只四阶', () => {
     for (const wave of [1, 2, 3]) expect(waveRoster(wave, waveSettings(wave).count, 'hard', () => .2)
       .every(kind => ['normal', 'cone', 'bucket'].includes(kind))).toBe(true);
-    const tierOneRoll = waveRoster(10, waveSettings(10).count, 'hard', () => 0);
-    expect(tierOneRoll).toHaveLength(57);
-    expect(tierOneRoll).not.toContain('football');
+    for (const wave of [10, 11, 12]) {
+      const tierOneRoll = waveRoster(wave, waveSettings(wave).count, 'hard', () => 0);
+      expect(tierOneRoll).toHaveLength(waveSettings(wave).count);
+      expect(tierOneRoll.filter(kind => kind === 'football')).toHaveLength(1);
+    }
     expect(waveRoster(10, 1, 'hard', () => .999)).toEqual(['football']);
     expect(waveRoster(9, waveSettings(9).count, 'hard', () => 0)).not.toContain('football');
+    expect(waveRoster(13, waveSettings(13).count, 'hard', () => 0)).not.toContain('football');
   });
 
   it('盾牌可从侧后绕过且破盾不会加速，狂暴恰在4x生命触发', () => {
@@ -58,7 +61,7 @@ describe('八类僵尸数值与阶位名单', () => {
     expect(shield.armorHealth).toBe(0);
     expect(zombieMoveSpeed(shield, 2)).toBeCloseTo(2.2);
     const berserker = actor('berserker'); encounter.zombies = [berserker];
-    expect(encounter.hit(1, false, 399)?.enraged).toBeUndefined();
+    expect(encounter.hit(1, false, 599)?.enraged).toBeUndefined();
     expect(encounter.hit(1, false, 1)?.enraged).toBe(true);
     expect(berserker.ragePause).toBe(ENEMY_RULES.berserker.ragePause);
     expect(zombieMoveSpeed(berserker, 2)).toBe(0);

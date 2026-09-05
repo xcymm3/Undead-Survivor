@@ -77,6 +77,10 @@ describe('2～4 人房主权威模拟', () => {
     expect(validWorld({ ...first, players: [first.players[0], first.players[0]] }, members)).toBe(false);
     expect(validWorld({ ...first, intermission: -1 }, members)).toBe(false);
     expect(validWorld({ ...first, inputs: [{ id: '222', ack: 0, keys: ['Teleport'] }] }, members)).toBe(false);
+    const football = { id: 999, kind: 'football' as const, x: 0, z: -10, health: 3750, bodyHealth: 1750,
+      armorHealth: 2000, maxHealth: 3750, downTime: 0, bornAt: 0 };
+    expect(validWorld({ ...first, zombies: [football] }, members)).toBe(true);
+    expect(validWorld({ ...first, zombies: [{ ...football, health: 3751, bodyHealth: 1751 }] }, members)).toBe(false);
   });
   it('队员在快照之间连续插值僵尸位置与朝向', () => {
     const { guest, b } = pair();

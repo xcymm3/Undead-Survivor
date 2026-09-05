@@ -19,16 +19,16 @@ export const ZOMBIE_TYPES = {
   bucket: { label: '铁桶僵尸', health: 400, armor: 300, tier: 1 },
   imp: { label: '小鬼僵尸', health: 300, armor: 0, tier: 2 },
   shield: { label: '持盾僵尸', health: 600, armor: 400, tier: 2 },
-  berserker: { label: '狂暴僵尸', health: 800, armor: 0, tier: 3 },
+  berserker: { label: '狂暴僵尸', health: 1200, armor: 0, tier: 3 },
   giant: { label: '巨人僵尸', health: 2000, armor: 0, tier: 3 },
-  football: { label: '橄榄球僵尸', health: 2500, armor: 2000, tier: 4 },
+  football: { label: '橄榄球僵尸', health: 3750, armor: 2000, tier: 4 },
 } as const;
 export const ZOMBIE_KINDS = Object.keys(ZOMBIE_TYPES) as ZombieKind[];
 export const emptyZombieCounts = () => Object.fromEntries(ZOMBIE_KINDS.map(kind => [kind, 0])) as Record<ZombieKind, number>;
 export const ENEMY_RULES = {
   imp: { speed: 1.75, speedCap: 4, scale: .65, contactRadius: 1, separationRadius: .85, windup: .18, duration: .7 },
   shield: { speed: 1.1, speedCap: 3.6, scale: 1.05, contactRadius: 1.3, windup: .3, duration: 1, exposeDuration: .45 },
-  berserker: { health: 800, speed: 1.35, rageAt: 400, ragePause: .35, rageSpeed: 2, speedCap: 4.3,
+  berserker: { health: 1200, speed: 1.35, rageAt: 600, ragePause: .35, rageSpeed: 2, speedCap: 4.3,
     windup: .25, duration: .85, rageWindup: .15, rageDuration: .55 },
   giant: { speed: .75, scale: 1.8, contactRadius: 1.8, separationRadius: 2.1, windup: .65, duration: 1.5, slamRadius: 2.4 },
   football: { speed: 1.5, brokenSpeed: 1.25, speedCap: 4, scale: 1.1, contactRadius: 1.35, windup: .2, duration: .7,

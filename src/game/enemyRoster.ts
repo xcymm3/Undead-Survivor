@@ -51,8 +51,14 @@ export function randomZombieKind(wave: number, random: () => number = Math.rando
 export function waveRoster(wave: number, count: number, difficulty: Difficulty = 'hard', random: () => number = Math.random) {
   const size = Math.max(0, Math.floor(count));
   if (difficulty === 'easy') return Array<ZombieKind>(size).fill('normal');
-  return Array.from({ length: size }, () => difficulty === 'normal'
+  const roster = Array.from({ length: size }, () => difficulty === 'normal'
     ? weighted(POOLS[1], random).kind : randomZombieKind(wave, random));
+  const normalizedWave = Math.max(1, Math.floor(wave));
+  // 第 10～12 波已进入四阶教学阶段：保留原概率分布，但整波未抽中时用末位补足一只。
+  if (difficulty === 'hard' && size > 0 && normalizedWave >= 10 && normalizedWave <= 12 && !roster.includes('football')) {
+    roster[size - 1] = 'football';
+  }
+  return roster;
 }
 
 export function simultaneousCap(kind: ZombieKind, wave: number, players: number) {
