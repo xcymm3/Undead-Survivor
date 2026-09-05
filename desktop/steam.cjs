@@ -82,7 +82,7 @@ class SteamRooms {
     return sent;
   }
   sendSnapshot(payload) {
-    const compressed = deflateRawSync(Buffer.from(JSON.stringify(payload)));
+    const compressed = deflateRawSync(Buffer.from(JSON.stringify(payload)), { level: 1 });
     const total = Math.ceil(compressed.length / SNAPSHOT_CHUNK);
     if (!total || total > 64) return false;
     let sent = true;

@@ -5,6 +5,8 @@ import type { Encounter } from '../game/encounter';
 import type { Match, Pawn, Command, WorldState } from './types';
 import { validCommand, validWorld } from './types';
 
+const compact = (value: number) => Math.round(value * 1000) / 1000;
+
 /** 房主接受输入并模拟队友；客户端仅预测自己移动，不提交位置、血量或伤害。 */
 export class CoopSession {
   readonly players: Pawn[];
@@ -129,11 +131,17 @@ export class CoopSession {
   sendHit(head: boolean, killed: boolean, armorBroken: boolean) { this.send({ type: 'hit', head, killed, armorBroken }); }
   broadcast(delta: number, force = false) {
     if (!this.host) return;
-    this.worldTimer += delta; if (!force && this.worldTimer < .1) return; this.worldTimer = 0;
+    this.worldTimer += delta;
+    // 常见波次用 15 Hz 提高跟随性；尸群很大时退回 10 Hz 控制带宽。
+    const interval = this.encounter.zombies.length > 96 ? .1 : 1 / 15;
+    if (!force && this.worldTimer < interval) return; this.worldTimer = 0;
     const e = this.encounter;
-    const state: WorldState = { type: 'world', seq: ++this.outgoing, inputAck: this.inputSeq, inputKeys: [...this.keys], players: this.players.map(p => ({ ...p })),
-      zombies: e.zombies.map(z => ({ ...z })), wave: e.wave, wavesCleared: e.wavesCleared, waveSpawned: e.waveSpawned,
-      totalSpawned: e.totalSpawned, intermission: e.intermission, elapsed: e.elapsed, kills: e.kills, failed: e.failed };
+    const state: WorldState = { type: 'world', seq: ++this.outgoing, inputAck: this.inputSeq, inputKeys: [...this.keys],
+      players: this.players.map(p => ({ ...p, x: compact(p.x), z: compact(p.z), height: compact(p.height), yaw: compact(p.yaw), pitch: compact(p.pitch), lastDamageAt: compact(p.lastDamageAt) })),
+      zombies: e.zombies.map(z => ({ ...z, x: compact(z.x), z: compact(z.z), downTime: compact(z.downTime), bornAt: compact(z.bornAt),
+        ...(z.heading === undefined ? {} : { heading: compact(z.heading) }), ...(z.attackTime === undefined ? {} : { attackTime: compact(z.attackTime) }),
+        ...(z.avoidance === undefined ? {} : { avoidance: compact(z.avoidance) }) })), wave: e.wave, wavesCleared: e.wavesCleared, waveSpawned: e.waveSpawned,
+      totalSpawned: e.totalSpawned, intermission: compact(e.intermission), elapsed: compact(e.elapsed), kills: e.kills, failed: e.failed };
     this.send(state);
   }
 }

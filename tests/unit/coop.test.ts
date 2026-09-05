@@ -81,6 +81,16 @@ describe('双人权威模拟', () => {
     expect(Math.abs(b.zombies[0].heading! - 3)).toBeLessThan(.25);
     guest.smoothWorld(.1); expect(b.zombies[0]).toMatchObject({ x: 1, z: -11 });
   });
+  it('常规尸群以十五赫兹同步并压缩坐标精度，大尸群自动降到十赫兹', () => {
+    const { host, a, packets } = pair(); host.local.x = 1.23456;
+    host.broadcast(.05); expect(packets).toHaveLength(0);
+    host.broadcast(.017); expect(packets).toHaveLength(1);
+    expect((packets[0] as WorldState).players[0].x).toBe(1.235);
+    a.zombies = Array.from({ length: 97 }, (_, id) => ({ id, kind: 'normal' as const, x: id / 7, z: -id / 9,
+      health: 100, armorHealth: 0, maxHealth: 100, downTime: 0, bornAt: 0 }));
+    host.broadcast(.08); expect(packets).toHaveLength(1);
+    host.broadcast(.02); expect(packets).toHaveLength(2);
+  });
   it('死亡队友的射击指令无法造成伤害', () => {
     const { host, guest } = pair(); let fired = 0;
     guest.command({ type: 'fire', yaw: 0, pitch: 0 }); host.advanceRemote(.05, nav, () => { fired++; });
