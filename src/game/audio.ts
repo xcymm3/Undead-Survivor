@@ -25,6 +25,7 @@ export class GameAudio {
   private level = 1;
   private armorCues = 0;
   private lastArmorCue: { kind: ZombieKind; broken: boolean } | null = null;
+  private mechanicalCues = 0;
 
   constructor() {
     try {
@@ -129,6 +130,28 @@ export class GameAudio {
     this.tone(140, 44, 0.17, 0.12);
   }
 
+  mechanical(kind: 'release' | 'eject' | 'insert' | 'action' | 'shell' | 'close') {
+    const ctx = this.context;
+    if (!ctx || !this.master || !this.enabled || this.level === 0 || ctx.state !== 'running') return;
+    this.mechanicalCues++; this.duckMusic(.12);
+    if (!this.noise) {
+      this.noise = ctx.createBuffer(1, ctx.sampleRate * .3, ctx.sampleRate);
+      const data = this.noise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const profile = {
+      release: [1800, .035, .045], eject: [1200, .055, .06], insert: [650, .075, .095],
+      action: [2300, .05, .075], shell: [1050, .045, .065], close: [520, .065, .08],
+    }[kind];
+    const source = ctx.createBufferSource(); source.buffer = this.noise;
+    const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = profile[0]; filter.Q.value = 1.8;
+    const gain = ctx.createGain(), start = ctx.currentTime;
+    gain.gain.setValueAtTime(profile[1], start); gain.gain.exponentialRampToValueAtTime(.001, start + profile[2]);
+    source.connect(filter).connect(gain).connect(this.master);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    source.start(start, Math.random() * .18, profile[2]);
+  }
+
   failure() {
     this.failureCues++;
     this.setPlaying(false);
@@ -188,6 +211,6 @@ export class GameAudio {
     this.duckMusic(source.buffer.duration);
   }
 
-  diagnostics() { return { enabled: this.enabled, volume: this.volume, gain: this.master?.gain.value ?? (this.muted ? 0 : this.level), armorCues: this.armorCues, lastArmorCue: this.lastArmorCue, deathCues: this.deathCues, failureCues: this.failureCues, activeDeaths: this.deathSources.size, musicPlaying: Boolean(this.musicSource), musicLevel: MUSIC_LEVEL, musicDucked: Boolean(this.musicSource && this.context && this.context.currentTime < this.duckUntil), duckedMusicLevel: DUCKED_MUSIC_LEVEL }; }
+  diagnostics() { return { enabled: this.enabled, volume: this.volume, gain: this.master?.gain.value ?? (this.muted ? 0 : this.level), armorCues: this.armorCues, lastArmorCue: this.lastArmorCue, deathCues: this.deathCues, failureCues: this.failureCues, mechanicalCues: this.mechanicalCues, activeDeaths: this.deathSources.size, musicPlaying: Boolean(this.musicSource), musicLevel: MUSIC_LEVEL, musicDucked: Boolean(this.musicSource && this.context && this.context.currentTime < this.duckUntil), duckedMusicLevel: DUCKED_MUSIC_LEVEL }; }
   dispose() { this.disposed = true; this.setPlaying(false); this.deathSources.clear(); void this.context?.close().catch(() => {}); }
 }

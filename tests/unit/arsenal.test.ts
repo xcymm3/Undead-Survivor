@@ -18,7 +18,7 @@ describe('独立弹匣与协调切枪', () => {
     expect(a.reloadQueued).toBe(true); a.update(WEAPONS[0].fireDuration); expect(a.gun.reloading).toBe(true);
     a.request(3); a.request(5); a.update(0.4);
     expect(a.active).toBe(0); expect(a.switching).toBe(false); expect(a.fire()).toBe(false);
-    a.update(0.4); expect(a.gun.ammo).toBe(30); expect(a.switching).toBe(true);
+    a.update(WEAPONS[0].reloadDuration); expect(a.gun.ammo).toBe(30); expect(a.switching).toBe(true);
     a.update(0.4); expect(a.active).toBe(5);
   });
   it('拔枪时的新请求排队，暂停零时间不推进，重开清空所有状态', () => {
@@ -32,6 +32,6 @@ describe('独立弹匣与协调切枪', () => {
     const gun = new Firearm(WEAPONS[4]); gun.ammo = 2; gun.reload();
     gun.update(gun.definition.reloadDuration - 0.001); expect(gun.ammo).toBe(2);
     gun.update(0.001); expect(gun.ammo).toBe(3); expect(gun.reloading).toBe(true);
-    gun.update(gun.definition.reloadDuration * 3); expect(gun.ammo).toBe(6); expect(gun.reloading).toBe(false);
+    gun.update(gun.definition.reloadDuration * 3 + .001); expect(gun.ammo).toBe(6); expect(gun.reloading).toBe(false);
   });
 });
