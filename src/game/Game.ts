@@ -8,7 +8,8 @@ import { CONFIG, FIXED_DIFFICULTY } from './config';
 import type { GameMode, GamePhase, GameSnapshot, RunResult } from './config';
 import { DEFAULT_GRAPHICS_SETTINGS, GRAPHICS_STORAGE_KEY, loadGraphicsSettings, matchingGraphicsPreset, presetSettings } from './graphics';
 import type { AntiAliasing, GraphicsPreset, GraphicsSettings, ShadowQuality } from './graphics';
-import { weaponQuaternion } from './aim';
+import { visualWeaponTarget, weaponQuaternion } from './aim';
+import { scheduleFrame } from './frameTiming';
 import { GameAudio } from './audio';
 import { Arsenal } from './arsenal';
 import { WEAPONS } from './weapons';
@@ -79,6 +80,7 @@ export class Game {
   private elapsed = 0;
   private frameId = 0;
   private previousTime = 0;
+  private frameDeadline = 0;
   private dirty = true;
   private renderCount = 0;
   private shadowTime = 0;
@@ -272,7 +274,7 @@ export class Game {
     this.phase = 'playing';
     this.keys.clear(); this.trigger = false;
     this.requestPointerLock();
-    this.previousTime = 0;
+    this.previousTime = 0; this.frameDeadline = 0;
     this.dirty = true;
     this.aim.set(0, 0);
     this.updateCrosshair();
@@ -431,7 +433,7 @@ export class Game {
     if (persist) {
       try { localStorage.setItem(GRAPHICS_STORAGE_KEY, JSON.stringify(this.graphics)); } catch { /* 设置仍对当前运行有效。 */ }
     }
-    this.previousTime = 0;
+    this.previousTime = 0; this.frameDeadline = 0;
     this.resize();
     this.publish();
   }
@@ -515,7 +517,7 @@ export class Game {
     const viewY = definition.length < 0.6 ? -0.32 : -0.40;
     this.weapon.root.position.set((viewX - reloadMotion * 0.04) * 0.5, (viewY - drop * 1.45 + reloadMotion * 0.08 - this.recoil * 0.025) * 0.5, -0.38 + this.recoil * 0.04);
     const localTarget = this.camera.worldToLocal(this.aimPoint.clone());
-    this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, localTarget));
+    this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, visualWeaponTarget(localTarget)));
     this.weapon.root.rotateZ(-reloadMotion * 0.24 - drop * 0.20);
     this.weapon.root.updateMatrixWorld(true);
   }
@@ -672,9 +674,11 @@ export class Game {
   private frame = (time: number) => {
     if (this.disposed) return;
     this.frameId = requestAnimationFrame(this.frame);
-    if (this.background || ((!this.coop || this.phase === 'failed') && this.phase !== 'playing' && this.phase !== 'breaching' && !this.dirty)) { this.previousTime = 0; return; }
-    // 保留 RAF 的刷新同步，并按本机选择的帧率上限绘制。
-    if (this.graphics.frameLimit && this.previousTime && time - this.previousTime < 1000 / this.graphics.frameLimit - 0.5) return;
+    if (this.background || ((!this.coop || this.phase === 'failed') && this.phase !== 'playing' && this.phase !== 'breaching' && !this.dirty)) { this.previousTime = 0; this.frameDeadline = 0; return; }
+    // 保留 RAF 的刷新同步，并用累计截止时间避免 60 FPS 在 75/144/165 Hz 屏幕上被错误量化。
+    const schedule = scheduleFrame(this.frameDeadline, time, this.graphics.frameLimit);
+    this.frameDeadline = schedule.deadline;
+    if (!schedule.render) return;
     const rawDelta = this.previousTime ? (time - this.previousTime) / 1000 : 0;
     const delta = Math.min(rawDelta, 0.1);
     this.previousTime = time;
@@ -757,7 +761,7 @@ export class Game {
     }
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     // 特写取景与首帧材质准备可能耗时；从首帧呈现后重新计时，避免吞掉两秒动画。
-    if (!wasBreaching && this.phase === 'breaching') this.previousTime = 0;
+    if (!wasBreaching && this.phase === 'breaching') { this.previousTime = 0; this.frameDeadline = 0; }
     this.renderCount++;
     if (time - this.publishTime > 200) { this.publishTime = time; this.publish(); }
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { weaponQuaternion } from '../../src/game/aim';
+import { MIN_WEAPON_CONVERGENCE, visualWeaponTarget, weaponQuaternion } from '../../src/game/aim';
 import { turnView } from '../../src/game/player';
 import { CONFIG } from '../../src/game/config';
 describe('自由视角与枪口瞄准', () => {
@@ -26,5 +26,13 @@ describe('自由视角与枪口瞄准', () => {
       const expected = target.clone().sub(muzzle).normalize();
       expect(direction.dot(expected)).toBeCloseTo(1, 12);
     }
+  });
+  it('近处地面命中不会让第一人称枪模突然向相机收敛', () => {
+    const near = new Vector3(0, 0, -1.7);
+    const visual = visualWeaponTarget(near);
+    expect(visual.length()).toBeCloseTo(MIN_WEAPON_CONVERGENCE, 10);
+    expect(visual.clone().normalize().dot(near.clone().normalize())).toBeCloseTo(1, 12);
+    const far = new Vector3(0, 0, -20);
+    expect(visualWeaponTarget(far)).toBe(far);
   });
 });
