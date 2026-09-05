@@ -19,7 +19,19 @@ await mkdir(portableDir, { recursive: true });
 await copyFile(source, path.join(portableDir, filename));
 const errors = [], requests = new Set();
 const click = (page, name) => page.getByRole('button', { name }).evaluate(button => button.click());
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 let app;
+
+async function renameAfterUnlock(source, destination) {
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    try { await rename(source, destination); return; }
+    catch (error) {
+      if (!['EPERM', 'EBUSY'].includes(error.code) || Date.now() >= deadline) throw error;
+      await delay(250);
+    }
+  }
+}
 
 async function assertHidden() {
   const states = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(w => ({
@@ -105,7 +117,7 @@ try {
 
   const movedDir = path.join(evidence, '搬迁后');
   for (const dir of [portableDir, movedDir]) assert.ok(path.resolve(dir).startsWith(`${evidence}${path.sep}`));
-  await rename(portableDir, movedDir);
+  await renameAfterUnlock(portableDir, movedDir);
   portableDir = movedDir;
   page = await start();
   await click(page, '游戏设置');
