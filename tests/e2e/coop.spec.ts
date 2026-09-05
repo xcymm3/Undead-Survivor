@@ -3,6 +3,7 @@ import type { Room, SteamEvent, SteamStatus, WorldState } from '../../src/multip
 import { capture, lookAt, snapshot } from './controls';
 import { LEADERBOARD_KEY } from '../../src/game/leaderboard';
 import { WEAPONS } from '../../src/game/weapons';
+import { defaultAppearance } from '../../src/multiplayer/appearance';
 
 test('双端房间开局、双方射击清波、一人观战与全员死亡结算', async ({ browser }) => {
   test.setTimeout(150000);
@@ -186,10 +187,12 @@ test('四人快照支持左键循环观战并在清波后全员复活', async ({
     { ...members[1], x: 3, z: 9, height: 0, yaw: 0, pitch: 0, health: 0, lastDamageAt: 1, weapon: 2, shots: 0, ammo: 12, reloading: false, reloadProgress: 1 },
     { ...members[2], x: 5, z: -3, height: 0, yaw: 1.1, pitch: -.1, health: 70, lastDamageAt: .5, weapon: 1, shots: 4, ammo: 46, reloading: false, reloadProgress: 1 },
     { ...members[3], x: 10, z: -12, height: 0, yaw: -1.2, pitch: .2, health: 40, lastDamageAt: .7, weapon: 4, shots: 1, ammo: 5, reloading: false, reloadProgress: 1 },
-  ];
+  ].map((player, index) => ({ ...player, reloadEmpty: false, appearance: defaultAppearance(index) }));
   const world: WorldState = { type: 'world', seq: 1, inputs: members.slice(1).map(member => ({ id: member.id, ack: 0, keys: [] })), players,
     zombies: [], wave: 1, wavesCleared: 0, waveSpawned: 0, totalSpawned: 0, intermission: 0, elapsed: 1, kills: 0, failed: false };
   await page.evaluate(world => (window as any).__testSteamEvent({ type: 'packet', from: '111', data: world }), world);
+  await expect.poll(async () => (await snapshot(page)).partners.every(partner => partner.loaded), { timeout: 15000 }).toBe(true);
+  expect((await snapshot(page)).partners.map(partner => partner.appearance).sort()).toEqual(['casual-female:3:0', 'casual-male:2:5', 'soldier-male:0:3']);
   await expect.poll(async () => (await snapshot(page)).health).toBe(0);
   await expect.poll(async () => (await snapshot(page)).coop?.spectating).toBe('111');
   await page.getByTestId('game-canvas').dispatchEvent('pointerdown', { button: 0 });

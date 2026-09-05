@@ -1,4 +1,6 @@
 import type { Zombie } from '../game/encounter';
+import type { PlayerAppearance } from './appearance';
+import { isValidAppearance } from './appearance';
 
 export interface Member { id: string; name: string; }
 export interface Room { id: string; name: string; owner: string; members: Member[]; memberCount?: number; playing: boolean; }
@@ -14,11 +16,12 @@ export interface SteamBridge {
 declare global { interface Window { steamCoop?: SteamBridge; } }
 export interface Pawn extends Member {
   x: number; z: number; height: number; yaw: number; pitch: number; health: number; lastDamageAt: number; weapon: number; shots: number;
-  ammo: number; reloading: boolean; reloadProgress: number;
+  ammo: number; reloading: boolean; reloadProgress: number; reloadEmpty: boolean; appearance: PlayerAppearance;
 }
 export type Command = { type: 'input'; seq: number; keys: string[]; yaw: number; pitch: number; jump: number }
   | { type: 'fire'; seq: number; yaw: number; pitch: number }
-  | { type: 'reload' | 'weapon'; seq: number; index: number };
+  | { type: 'reload' | 'weapon'; seq: number; index: number }
+  | { type: 'appearance'; seq: number; appearance: PlayerAppearance };
 export interface InputState { id: string; ack: number; keys: string[]; }
 export interface WorldState {
   type: 'world'; seq: number; inputs: InputState[]; players: Pawn[]; zombies: Zombie[]; wave: number; wavesCleared: number;
@@ -33,6 +36,7 @@ export function validCommand(v: unknown): v is Command {
   if (p.type === 'input') return Array.isArray(p.keys) && p.keys.length <= 4 && p.keys.every(k => movementKeys.includes(k))
     && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && Number.isSafeInteger(p.jump) && p.jump >= 0;
   if (p.type === 'fire') return finite(p.yaw, 1e6) && finite(p.pitch, 1.49);
+  if (p.type === 'appearance') return isValidAppearance(p.appearance);
   return (p.type === 'reload' || p.type === 'weapon') && Number.isInteger(p.index) && p.index >= 0 && p.index < 6;
 }
 export function validWorld(v: unknown, members: Member[]): v is WorldState {
@@ -51,7 +55,8 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && finite(p.health, 100) && p.health >= 0
       && Number.isFinite(p.lastDamageAt) && Number.isInteger(p.weapon) && p.weapon >= 0 && p.weapon < 6
       && Number.isSafeInteger(p.shots) && p.shots >= 0 && Number.isInteger(p.ammo) && p.ammo >= 0 && p.ammo <= 50
-      && typeof p.reloading === 'boolean' && finite(p.reloadProgress, 1) && p.reloadProgress >= 0)
+      && typeof p.reloading === 'boolean' && finite(p.reloadProgress, 1) && p.reloadProgress >= 0 && typeof p.reloadEmpty === 'boolean'
+      && isValidAppearance(p.appearance))
     && Array.isArray(s.zombies) && s.zombies.length <= 256 && s.zombies.every(z => z && typeof z === 'object') && new Set(s.zombies.map(z => z.id)).size === s.zombies.length
     && s.zombies.every(z => Number.isSafeInteger(z.id) && z.id >= 0 && ['normal', 'cone', 'bucket'].includes(z.kind)
       && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, 400) && z.health >= 0 && finite(z.armorHealth, 300)

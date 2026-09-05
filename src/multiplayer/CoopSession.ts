@@ -5,6 +5,8 @@ import { PlayerMotion } from '../game/player';
 import type { Encounter } from '../game/encounter';
 import type { Match, Pawn, Command, WorldState } from './types';
 import { validCommand, validWorld } from './types';
+import { defaultAppearance, normalizeAppearance } from './appearance';
+import type { PlayerAppearance } from './appearance';
 
 const compact = (value: number) => Math.round(value * 1000) / 1000;
 const SPAWNS = [{ x: -3, z: 9 }, { x: 3, z: 9 }, { x: -3, z: 6.5 }, { x: 3, z: 6.5 }] as const;
@@ -32,10 +34,11 @@ export class CoopSession {
   feedback: { head: boolean; killed: boolean; armorBroken: boolean }[] = [];
 
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
-    private send: (data: unknown) => void) {
+    private send: (data: unknown) => void, appearance: PlayerAppearance = defaultAppearance(match.members.findIndex(member => member.id === match.local))) {
     this.host = match.host === match.local;
     this.players = match.members.map((member, index) => ({ ...member, ...SPAWNS[index], height: 0, yaw: 0, pitch: 0,
-      health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1 }));
+      health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1,
+      reloadEmpty: false, appearance: member.id === match.local ? normalizeAppearance(appearance) : defaultAppearance(index) }));
     for (const player of this.remotes) this.controllers.set(player.id, {
       motion: new PlayerMotion(), arsenal: new Arsenal(), keys: new Set(), lastInputAt: 0, lastPacketAt: performance.now(),
       commandSeq: -1, inputSeq: -1, jump: 0, commands: [],
@@ -55,6 +58,10 @@ export class CoopSession {
 
   command(data: Omit<Extract<Command, { type: 'fire' }>, 'seq'> | Omit<Extract<Command, { type: 'reload' | 'weapon' }>, 'seq'>) {
     if (!this.host && this.local.health > 0) this.send({ ...data, seq: ++this.outgoing });
+  }
+
+  announceAppearance() {
+    if (!this.host) this.send({ type: 'appearance', seq: ++this.outgoing, appearance: this.local.appearance });
   }
 
   sendInput(keys: Set<string>, yaw: number, pitch: number, jump: number, delta: number) {
@@ -80,7 +87,8 @@ export class CoopSession {
       } else {
         if (data.seq <= controller.commandSeq) return;
         controller.commandSeq = data.seq;
-        if (controller.commands.length < 32) controller.commands.push(data);
+        if (data.type === 'appearance') player.appearance = normalizeAppearance(data.appearance);
+        else if (controller.commands.length < 32) controller.commands.push(data);
       }
       return;
     }
@@ -160,6 +168,7 @@ export class CoopSession {
       if (player.health === 0) controller.commands = [];
       player.weapon = controller.arsenal.active; player.shots = controller.arsenal.shots;
       player.ammo = controller.arsenal.gun.ammo; player.reloading = controller.arsenal.gun.reloading; player.reloadProgress = controller.arsenal.gun.animationProgress;
+      player.reloadEmpty = controller.arsenal.gun.reloadEmpty;
     }
   }
 

@@ -16,6 +16,16 @@ function pair() {
   return { host, guest, a, b, packets };
 }
 describe('2～4 人房主权威模拟', () => {
+  it('只发送一次外貌选择并由房主纳入原有世界快照', () => {
+    const { host, guest, packets } = pair();
+    guest.local.appearance = { character: 'worker-female', primary: 4, accent: 2 };
+    guest.announceAppearance();
+    expect(host.remote.appearance).toEqual(guest.local.appearance);
+    host.broadcast(0, true);
+    const world = packets[0] as WorldState;
+    expect(world.players.find(player => player.id === '222')?.appearance).toEqual(guest.local.appearance);
+  });
+
   it('只接受队友输入，拒绝伪造位置、非法数值、重复与倒序输入', () => {
     const { host } = pair();
     expect(validCommand({ type: 'input', seq: 1, keys: ['Teleport'], yaw: 0, pitch: 0, jump: 0 })).toBe(false);

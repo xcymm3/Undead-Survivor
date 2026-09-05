@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Room, SteamStatus } from '../multiplayer/types';
+import { APPEARANCE_COLORS, CHARACTER_PRESETS, loadAppearance, saveAppearance } from '../multiplayer/appearance';
+import type { PlayerAppearance } from '../multiplayer/appearance';
 
 export function MultiplayerPanel({ close, notice = '' }: { close: () => void; notice?: string }) {
   const [status, setStatus] = useState<SteamStatus | null>(null);
@@ -9,6 +12,7 @@ export function MultiplayerPanel({ close, notice = '' }: { close: () => void; no
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
+  const [appearance, setAppearance] = useState(loadAppearance);
   const bridge = window.steamCoop;
   const run = async (action: () => Promise<unknown>) => {
     if (busy) return; setBusy(true); setError('');
@@ -23,6 +27,7 @@ export function MultiplayerPanel({ close, notice = '' }: { close: () => void; no
     return () => { active = false; off(); };
   }, [bridge]);
   const room = status?.room;
+  const changeAppearance = (next: PlayerAppearance) => setAppearance(saveAppearance(next));
   return <section className="multiplayer-screen" role="dialog" aria-modal="true" aria-labelledby="multiplayer-title">
     <div className="multiplayer-panel">
       <span className="label">2–4 SURVIVORS / STEAM P2P</span><h2 id="multiplayer-title">多人模式</h2>
@@ -30,6 +35,11 @@ export function MultiplayerPanel({ close, notice = '' }: { close: () => void; no
       {!bridge ? <div className="network-note">请在桌面版中使用 Steam 联机，并先登录 Steam。浏览器支持单人模式。</div>
         : !status?.available ? <div className="network-note"><p>{status?.message || '正在连接 Steam…'}</p><button className="text-button" disabled={busy} onClick={() => run(async () => setStatus(await bridge.status()))}>重新连接 Steam</button></div>
         : <><p className="network-identity">{status.name} · Spacewar 测试（App ID 480）</p>
+          <section className="appearance-editor" aria-labelledby="appearance-title">
+            <div><span className="label">SURVIVOR APPEARANCE</span><h3 id="appearance-title">幸存者外貌</h3><small>仅保存在本机，进入战斗后自动同步给队友</small></div>
+            <div className="character-options" role="group" aria-label="角色外形">{CHARACTER_PRESETS.map(character => <button key={character.id} type="button" aria-pressed={appearance.character === character.id} onClick={() => changeAppearance({ ...appearance, character: character.id })}><i data-character={character.id.includes('female') ? 'female' : 'male'} style={{ '--primary': `#${APPEARANCE_COLORS[appearance.primary].value.toString(16).padStart(6, '0')}` } as CSSProperties} /><span>{character.label}</span></button>)}</div>
+            <div className="appearance-colors"><span>服装主色</span><div role="group" aria-label="服装主色">{APPEARANCE_COLORS.map((color, index) => <button key={color.label} type="button" aria-label={color.label} aria-pressed={appearance.primary === index} style={{ backgroundColor: `#${color.value.toString(16).padStart(6, '0')}` }} onClick={() => changeAppearance({ ...appearance, primary: index })} />)}</div><span>服装辅色</span><div role="group" aria-label="服装辅色">{APPEARANCE_COLORS.map((color, index) => <button key={color.label} type="button" aria-label={color.label} aria-pressed={appearance.accent === index} style={{ backgroundColor: `#${color.value.toString(16).padStart(6, '0')}` }} onClick={() => changeAppearance({ ...appearance, accent: index })} />)}</div></div>
+          </section>
           {room ? <div className="room-current"><span className="label">{room.owner === status.id ? '你是房主' : '等待房主'}</span><h3>{room.name}</h3><p>房间号 <code>{room.id}</code> · {room.members.length} / 4 人</p>
             <ul>{room.members.map(m => <li key={m.id}><span>{m.name}{m.id === status.id ? '（你）' : ''}</span><b>{m.id === room.owner ? '房主' : '队友'}</b></li>)}</ul>
             <p>{room.playing ? '正在连接小队，准备进入战斗…' : room.members.length >= 2 ? `已有 ${room.members.length} 人，可以开始或继续等待。` : '至少需要一名队友加入。'}</p>

@@ -370,3 +370,23 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
+
+
+# Quaternius Ultimate Animated Character Pack
+
+Author: Quaternius. License: CC0 1.0 Universal (public domain dedication).
+
+- Official pack: https://quaternius.com/packs/ultimatedanimatedcharacter.html
+- Author download folder: https://drive.google.com/drive/folders/1sNi1AfenfPRrvRt5yfaj5QMMd6KKcUJ5
+- License: https://creativecommons.org/publicdomain/zero/1.0/
+
+Retrieved 2026-09-05. Included original glTF character files: Casual,
+Soldier, and Worker, with male and female variants. Six files total.
+
+Runtime adaptations select the character model, clone its skeleton and
+materials, apply a selectable primary/accent color palette, and play the
+bundled animations. Models are served locally with the game.
+
+CC0 allows copying, modifying and distributing these assets, including
+commercial use. Quaternius is credited here even though attribution is not
+required by CC0. This notice does not claim authorship of the character models.
