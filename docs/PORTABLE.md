@@ -1,12 +1,12 @@
 # Undead Survivor Windows 便携版
 
-当前发布目标：`Undead Survivor-0.7.0.exe`，Windows 10/11 x64。包含自由移动、跳河、波次生存、排行榜、五档画质设置，以及 Steam 2～4 人合作模式。
+当前发布目标：本地构建为 `Undead Survivor-0.7.0.exe`，GitHub Release 附件为 `Undead-Survivor-0.7.0.exe`。支持 Windows 10/11 x64，包含自由移动、跳河、波次生存、排行榜、五档画质设置，以及 Steam 2～4 人合作模式。
 
 ## 使用与分发
 
 将 EXE 放在可写入的文件夹，双击启动。无需 Node.js、Chrome 或本地服务器，首次启动会自动解压内置运行环境到临时目录。单人模式可离线游玩；多人模式要求每名玩家分别登录不同的 Steam 账号。
 
-联机的准备、创建/搜索/加入房间、操作与问题排查请阅读 [EXE 联机说明](MULTIPLAYER.md)。发给朋友时附上 Release 中的 `联机说明-0.7.0.txt` 即可，不需要源码或 `win-unpacked`。
+联机的准备、创建/搜索/加入房间、操作与问题排查请阅读 [EXE 联机说明](MULTIPLAYER.md)。发给朋友时附上 Release 中的 `Multiplayer-Guide-0.7.0.txt` 即可，不需要源码或 `win-unpacked`。
 
 EXE 旁自动创建 `Undead Survivor Data`，保存本机排行榜、设置与缓存。迁移自己的游戏时将 EXE 和数据文件夹一起移动；发给朋友时不要附上个人数据。新旧版使用相同数据目录，升级时可把新版放在旧版旁，避免同时运行两版。
 

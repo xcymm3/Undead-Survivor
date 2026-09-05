@@ -1,13 +1,13 @@
 # Undead Survivor 0.7.0 EXE 联机说明
 
-这份说明适用于 `Undead Survivor-0.7.0.exe`（Windows 10/11，64 位）。该版本使用 Steam Spacewar（App ID 480）测试 2～4 人 P2P 协作。
+这份说明适用于 GitHub Release 中的 `Undead-Survivor-0.7.0.exe`（Windows 10/11，64 位）。该版本使用 Steam Spacewar（App ID 480）测试 2～4 人 P2P 协作。
 
 ## 发给朋友哪些文件
 
 从 GitHub Release 下载并发送以下两个文件：
 
-- `Undead Survivor-0.7.0.exe`
-- `联机说明-0.7.0.txt`
+- `Undead-Survivor-0.7.0.exe`
+- `Multiplayer-Guide-0.7.0.txt`
 
 所有玩家必须使用相同版本。游戏已包含 Electron、Steam 接口与原生 DLL，无需安装 Node.js，也不要发送 `Undead Survivor Data` 或 `win-unpacked` 文件夹。
 

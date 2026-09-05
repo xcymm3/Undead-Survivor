@@ -66,7 +66,7 @@ npm run dev
 
 首页「多人模式」可以创建、搜索或按房间号加入最多四人的房间。达到 2 人后房主即可开始，也可以继续等待至 4 人。玩家阵亡后以第一人称观战，点击鼠标左键切换存活队友；每波清完后全员恢复 100 HP，阵亡玩家在安全出生点复活。只有全队同时阵亡才结束，多人成绩不写入单人排行榜。
 
-每名玩家需要一台 Windows 电脑和一个不同的 Steam 账号，所有人使用同一版本的 EXE，通过 Spacewar App ID 480 测试。把 `Undead Survivor-0.7.0.exe` 和 `联机说明-0.7.0.txt` 发给朋友即可，无需安装开发环境。房间流程、画质调整和常见问题见 [EXE 联机说明](docs/MULTIPLAYER.md)。
+每名玩家需要一台 Windows 电脑和一个不同的 Steam 账号，所有人使用同一版本的 EXE，通过 Spacewar App ID 480 测试。从 Release 下载 `Undead-Survivor-0.7.0.exe` 和 `Multiplayer-Guide-0.7.0.txt` 发给朋友即可，无需安装开发环境。房间流程、画质调整和常见问题见 [EXE 联机说明](docs/MULTIPLAYER.md)。
 
 ## 开发验证
 
