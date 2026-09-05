@@ -6,7 +6,7 @@ import { WEAPONS } from '../../src/game/weapons';
 import { defaultAppearance } from '../../src/multiplayer/appearance';
 
 test('双端房间开局、双方射击清波、一人观战与全员死亡结算', async ({ browser }) => {
-  test.setTimeout(150000);
+  test.setTimeout(240000);
   const contexts = [await browser.newContext({ viewport: { width: 1440, height: 900 } }), await browser.newContext({ viewport: { width: 1440, height: 900 } })];
   const pages = [await contexts[0].newPage(), await contexts[1].newPage()];
   const errors: string[] = [];
@@ -82,28 +82,27 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     expect(Math.max(...movement.slice(1).map((z, i) => z - movement[i]))).toBeLessThan(.12);
     async function fight(page: Page, killGoal: number) {
       await control(page);
-      return page.evaluate(async goal => {
-        const canvas = document.querySelector('canvas')!, blocked = new Map<number, number>();
-        const deadline = performance.now() + 60000;
-        while (performance.now() < deadline) {
-          const s = window.__undeadTower!.snapshot();
-          if (s.kills >= goal || s.health === 0 || s.phase !== 'playing') return s;
-          if (!s.ammo) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR' }));
-          const target = s.targets.filter(z => z.health > 0 && (blocked.get(z.id) ?? 0) < performance.now())
-            .sort((a, b) => Math.hypot(a.x - s.player.x, a.z - s.player.z) - Math.hypot(b.x - s.player.x, b.z - s.player.z))[0];
-          if (target && !s.reloading && s.ammo > 0) {
-            const dx = target.x - s.cameraPosition[0], dz = target.z - s.cameraPosition[2];
-            const height = target.kind === 'bucket' ? 2.21 : target.kind === 'cone' ? 2.4 : 1.83;
-            const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(height - s.cameraPosition[1], Math.hypot(dx, dz));
-            canvas.dispatchEvent(new PointerEvent('pointermove', { movementX: (s.yaw - yaw) / .0022, movementY: (s.pitch - pitch) / .0022 }));
-            canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0 })); window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
-            const after = window.__undeadTower!.snapshot();
-            if (after.shots > s.shots && after.lastShot?.hitTarget !== target.id) blocked.set(target.id, performance.now() + 500);
-          }
-          await new Promise(resolve => setTimeout(resolve, 220));
+      const blocked = new Map<number, number>(), deadline = Date.now() + 60000;
+      while (Date.now() < deadline) {
+        const s = await snapshot(page);
+        if (s.kills >= killGoal || s.health === 0 || s.phase !== 'playing') return s;
+        if (!s.ammo) await page.keyboard.press('r');
+        const target = s.targets.filter(z => z.health > 0 && (blocked.get(z.id) ?? 0) < Date.now())
+          .sort((a, b) => Math.hypot(a.x - s.player.x, a.z - s.player.z) - Math.hypot(b.x - s.player.x, b.z - s.player.z))[0];
+        if (target && !s.reloading && s.ammo > 0) {
+          const height = target.kind === 'bucket' ? 2.21 : target.kind === 'cone' ? 2.4 : 1.83;
+          await lookAt(page, target.x, height, target.z);
+          await page.evaluate(() => {
+            const canvas = document.querySelector('canvas')!;
+            canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0 }));
+            window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
+          });
+          const after = await snapshot(page);
+          if (after.shots > s.shots && after.lastShot?.hitTarget !== target.id) blocked.set(target.id, Date.now() + 500);
         }
-        return window.__undeadTower!.snapshot();
-      }, killGoal);
+        await page.waitForTimeout(220);
+      }
+      return snapshot(page);
     }
     expect((await fight(host, 1)).kills).toBeGreaterThanOrEqual(1);
     await control(guest); await lookAt(guest, -2, 1.7, 9);

@@ -6,7 +6,7 @@ import { WEAPONS } from '../../src/game/weapons';
 import { Mesh, MeshStandardMaterial } from 'three';
 
 describe('六款 Quaternius 枪械动画', () => {
-  for (const definition of WEAPONS) it(`${definition.id} 可解析、动作可动且结束复位`, () => {
+  for (const definition of WEAPONS.filter(weapon => !weapon.procedural)) it(`${definition.id} 可解析、动作可动且结束复位`, () => {
     const bytes = readFileSync(`public/models/weapons/${definition.model}.fbx`);
     const model = new FBXLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
     const rig = prepareWeapon(model, definition);

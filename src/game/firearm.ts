@@ -20,13 +20,14 @@ export class Firearm {
   get fireProgress() { return this.fireRemaining > 0 ? 1 - this.fireRemaining / this.definition.fireDuration : 1; }
   fire(): boolean {
     if (this.reloading || this.cooldown > 1e-8 || this.ammo === 0) return false;
-    this.ammo--; this.shots++;
+    if (!this.definition.infiniteAmmo) this.ammo--;
+    this.shots++;
     this.cooldown = this.definition.interval;
     this.fireRemaining = this.definition.fireDuration;
     return true;
   }
   reload(): boolean {
-    if (this.reloading || this.ammo === this.definition.capacity) return false;
+    if (this.definition.infiniteAmmo || this.definition.reloadDuration <= 0 || this.reloading || this.ammo === this.definition.capacity) return false;
     this.reloadEmpty = this.ammo === 0;
     this.reloadStartAmmo = this.ammo;
     this.reloadTotal = this.definition.reloadDuration * (this.definition.shellReload ? this.definition.capacity - this.ammo : 1);

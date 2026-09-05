@@ -336,7 +336,7 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 }
 
 /* 紧凑武器栏放在弹药 HUD 下方，保留中央射击区域。 */
-.weapon-slots { position: absolute; right: 36px; bottom: 60px; display: flex; gap: 4px; pointer-events: auto; }
+.weapon-slots { position: absolute; right: 36px; bottom: 60px; max-width: calc(100vw - 72px); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; pointer-events: auto; }
 .weapon-slots button { width: 56px; padding: 5px 3px; background: #17271dcc; color: var(--color-muted); border: 1px solid #a9b69044; cursor: pointer; display: grid; grid-template-columns: 12px 1fr; align-items: center; gap: 2px; }
 .weapon-slots button[aria-pressed="true"] { border-color: var(--color-accent); color: #ffe0a1; background: #4b4c2ce6; }
 .weapon-slots button[data-pending="true"] { border-style: dashed; border-color: #ffe0a1; }

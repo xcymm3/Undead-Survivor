@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Firearm } from '../../src/game/firearm';
 import { CONFIG } from '../../src/game/config';
+import { WEAPONS } from '../../src/game/weapons';
 
 describe('射击与装填', () => {
   it('每次有效开火消耗一发，冷却中拒绝重复射击', () => {
@@ -43,5 +44,11 @@ describe('射击与装填', () => {
     expect(gun.reloading).toBe(false);
     expect(gun.shots).toBe(0);
     expect(gun.fire()).toBe(true);
+  });
+  it('消防斧攻击不消耗弹药且不能换弹', () => {
+    const axe = new Firearm(WEAPONS[6]);
+    for (let i = 0; i < 4; i++) { expect(axe.fire()).toBe(true); axe.update(WEAPONS[6].interval); }
+    expect(axe.ammo).toBe(1);
+    expect(axe.reload()).toBe(false);
   });
 });

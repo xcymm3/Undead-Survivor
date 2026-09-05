@@ -1,0 +1,122 @@
+[
+  {
+    "id": "rifle",
+    "label": "步枪",
+    "capacity": 30,
+    "damagePerAttack": 50,
+    "interval": 0.15,
+    "reload": 1.25,
+    "burstDps": 333.3,
+    "sustainedDps": 260.9,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "p90",
+    "label": "P90 冲锋枪",
+    "capacity": 50,
+    "damagePerAttack": 40,
+    "interval": 0.09,
+    "reload": 1.45,
+    "burstDps": 444.4,
+    "sustainedDps": 336.1,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "pistol",
+    "label": "半自动手枪",
+    "capacity": 12,
+    "damagePerAttack": 75,
+    "interval": 0.22,
+    "reload": 1.1,
+    "burstDps": 340.9,
+    "sustainedDps": 240.6,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "revolver",
+    "label": "左轮手枪",
+    "capacity": 6,
+    "damagePerAttack": 100,
+    "interval": 0.4,
+    "reload": 1.9,
+    "burstDps": 250,
+    "sustainedDps": 139.5,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "shotgun",
+    "label": "泵动霰弹枪",
+    "capacity": 6,
+    "damagePerAttack": 224,
+    "interval": 0.64,
+    "reload": 3.3,
+    "burstDps": 350,
+    "sustainedDps": 188.2,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "sniper",
+    "label": "栓动狙击枪",
+    "capacity": 5,
+    "damagePerAttack": 200,
+    "interval": 0.8,
+    "reload": 1.65,
+    "burstDps": 250,
+    "sustainedDps": 177,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "axe",
+    "label": "消防斧",
+    "capacity": "∞",
+    "damagePerAttack": 160,
+    "interval": 0.68,
+    "reload": 0,
+    "burstDps": 235.3,
+    "sustainedDps": 235.3,
+    "range": 2.5,
+    "piercing": false
+  },
+  {
+    "id": "flamethrower",
+    "label": "喷火枪",
+    "capacity": 90,
+    "damagePerAttack": 14,
+    "interval": 0.08,
+    "reload": 2.6,
+    "burstDps": 175,
+    "sustainedDps": 128.6,
+    "range": 15,
+    "piercing": true
+  },
+  {
+    "id": "auto-shotgun",
+    "label": "自动霰弹枪",
+    "capacity": 12,
+    "damagePerAttack": 160,
+    "interval": 0.3,
+    "reload": 2.25,
+    "burstDps": 533.3,
+    "sustainedDps": 328.2,
+    "range": 180,
+    "piercing": false
+  },
+  {
+    "id": "heavy-machine-gun",
+    "label": "重机枪",
+    "capacity": 120,
+    "damagePerAttack": 38,
+    "interval": 0.09,
+    "reload": 3.8,
+    "burstDps": 422.2,
+    "sustainedDps": 312.3,
+    "range": 180,
+    "piercing": false
+  }
+]

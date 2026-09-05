@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { capture } from './controls';
+import { capture, fire } from './controls';
 import { WEAPONS } from '../../src/game/weapons';
 const snapshot = (page: Page) => page.evaluate(() => window.__undeadTower!.snapshot());
-async function freezeAt(page: Page, progress: number) {
-  await page.evaluate(async threshold => {
+async function freezeAt(page: Page, progress: number, initiate = false) {
+  await page.evaluate(async ({ threshold, initiate }) => {
+    if (initiate) window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR' }));
     const deadline = performance.now() + 4000;
     while (performance.now() < deadline) {
       const state = window.__undeadTower!.snapshot();
@@ -12,32 +13,44 @@ async function freezeAt(page: Page, progress: number) {
       await new Promise(requestAnimationFrame);
     }
     throw new Error('未捕获换弹阶段');
-  }, progress);
+  }, { threshold: progress, initiate });
 }
 
-test('六种悬浮枪械数字键切换、独立弹量、换弹动画与暂停协调', async ({ page }) => {
-  test.setTimeout(90000);
+test('十种武器数字键切换、右键抬枪、独立弹量、换弹动画与暂停协调', async ({ page }) => {
+  test.setTimeout(150000);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/'); await page.getByRole('button', { name: '进入哨站' }).click();
   await page.mouse.move(720, 450); await page.waitForTimeout(250);
   await page.addStyleTag({ content: '.pause-screen { visibility: hidden; }' });
   for (let i = 0; i < WEAPONS.length; i++) {
-    await page.keyboard.press(`Digit${i + 1}`);
+    await page.keyboard.press(i === 9 ? 'Digit0' : `Digit${i + 1}`);
     await expect.poll(async () => { const s = await snapshot(page); return s.weaponIndex === i && !s.switching; }).toBe(true);
     const idle = await snapshot(page);
-    expect(idle.weaponAnimation.loaded).toBe(true); expect(idle.weaponAnimation.visibleModels).toBe(1);
+    expect(idle.weaponAnimation.loaded).toBe(true); expect(idle.weaponAnimation.attachedModels).toBe(WEAPONS.length); expect(idle.weaponAnimation.visibleModels).toBe(1);
     await expect(page.getByTestId('weapon-name')).toContainText(WEAPONS[i].label);
-    await page.screenshot({ path: `test-results/weapon-${WEAPONS[i].id}.png` });
     // 每把枪在待机时枪口和中心瞄准射线保持一致。
     const ray = idle.aimPoint.map((v, index) => v - idle.muzzle[index]), length = Math.hypot(...ray);
     expect(ray.reduce((sum, v, index) => sum + v / length * idle.barrelDirection[index], 0)).toBeCloseTo(1, 7);
-    await page.mouse.click(720, 450);
-    expect((await snapshot(page)).ammo).toBe(WEAPONS[i].capacity - 1);
-    await page.keyboard.press('r'); await freezeAt(page, 0.4);
+    await page.mouse.down({ button: 'right' });
+    await expect.poll(async () => (await snapshot(page)).aimBlend).toBeGreaterThan(.8);
+    const aimed = await snapshot(page);
+    expect(aimed.aiming).toBe(true);
+    expect(Math.hypot(...aimed.muzzle.map((v, index) => v - idle.muzzle[index]))).toBeGreaterThan(.015);
+    aimed.ballisticMuzzle.forEach((value, index) => expect(value).toBeCloseTo(idle.ballisticMuzzle[index], 5));
+    const fired = await fire(page);
+    expect(fired.lastShot).not.toBeNull();
+    fired.lastShot!.muzzle.forEach((value, index) => expect(value).toBeCloseTo(aimed.ballisticMuzzle[index], 5));
+    await page.mouse.up({ button: 'right' });
+    expect(fired.ammo).toBe(WEAPONS[i].infiniteAmmo ? WEAPONS[i].capacity : WEAPONS[i].capacity - 1);
+    if (WEAPONS[i].infiniteAmmo) {
+      await page.keyboard.press('r');
+      expect((await snapshot(page)).reloading).toBe(false);
+      continue;
+    }
+    await freezeAt(page, 0.4, true);
     const during = await snapshot(page);
     expect(during.weaponAnimation.kind).toBe('reload');
     expect(during.weaponAnimation.bones).not.toEqual(idle.weaponAnimation.bones);
-    await page.screenshot({ path: `test-results/weapon-${WEAPONS[i].id}-reload.png` });
     await page.waitForTimeout(150); expect((await snapshot(page)).weaponAnimation).toEqual(during.weaponAnimation);
     await page.keyboard.press('Escape'); await capture(page);
     await expect.poll(async () => (await snapshot(page)).reloading).toBe(false);

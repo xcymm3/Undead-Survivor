@@ -37,7 +37,7 @@ export function validCommand(v: unknown): v is Command {
     && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && Number.isSafeInteger(p.jump) && p.jump >= 0;
   if (p.type === 'fire') return finite(p.yaw, 1e6) && finite(p.pitch, 1.49);
   if (p.type === 'appearance') return isValidAppearance(p.appearance);
-  return (p.type === 'reload' || p.type === 'weapon') && Number.isInteger(p.index) && p.index >= 0 && p.index < 6;
+  return (p.type === 'reload' || p.type === 'weapon') && Number.isInteger(p.index) && p.index >= 0 && p.index < 10;
 }
 export function validWorld(v: unknown, members: Member[]): v is WorldState {
   if (!v || typeof v !== 'object') return false;
@@ -53,8 +53,8 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
     && s.players.every(p => members.some(m => m.id === p.id) && typeof p.name === 'string' && p.name.length <= 128
       && finite(p.x, 22) && finite(p.z, 48) && finite(p.height, 3) && p.height >= 0
       && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && finite(p.health, 100) && p.health >= 0
-      && Number.isFinite(p.lastDamageAt) && Number.isInteger(p.weapon) && p.weapon >= 0 && p.weapon < 6
-      && Number.isSafeInteger(p.shots) && p.shots >= 0 && Number.isInteger(p.ammo) && p.ammo >= 0 && p.ammo <= 50
+      && Number.isFinite(p.lastDamageAt) && Number.isInteger(p.weapon) && p.weapon >= 0 && p.weapon < 10
+      && Number.isSafeInteger(p.shots) && p.shots >= 0 && Number.isInteger(p.ammo) && p.ammo >= 0 && p.ammo <= 120
       && typeof p.reloading === 'boolean' && finite(p.reloadProgress, 1) && p.reloadProgress >= 0 && typeof p.reloadEmpty === 'boolean'
       && isValidAppearance(p.appearance))
     && Array.isArray(s.zombies) && s.zombies.length <= 256 && s.zombies.every(z => z && typeof z === 'object') && new Set(s.zombies.map(z => z.id)).size === s.zombies.length

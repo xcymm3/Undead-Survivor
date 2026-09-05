@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { crossedReloadStage, reloadPose, reloadStage } from '../../src/game/reloadAnimation';
 import { WEAPONS } from '../../src/game/weapons';
 
-describe('六枪分阶段换弹轨迹', () => {
+describe('十款武器的分阶段动作轨迹', () => {
   it('每把枪依次经过五阶段并在首尾回到瞄准位姿', () => {
     const focusPoses = new Set<string>();
     for (const weapon of WEAPONS) {

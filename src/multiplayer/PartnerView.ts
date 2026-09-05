@@ -92,10 +92,20 @@ export class PartnerView extends THREE.Group {
 
   private updateWeapon(index: number) {
     if (this.weapon === index) return; this.weapon = index;
-    for (const child of [...this.heldWeapon.children]) if (child !== this.flash) this.heldWeapon.remove(child);
+    for (const child of [...this.heldWeapon.children]) if (child !== this.flash) {
+      child.traverse(node => { if (node instanceof THREE.Mesh) { node.geometry.dispose(); (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose()); } });
+      this.heldWeapon.remove(child);
+    }
     const definition = WEAPONS[index] ?? WEAPONS[0], length = definition.length;
-    box(this.heldWeapon, [.13, .15, length], [.22, 1.42, -.48 - length / 2], 0x263438);
-    box(this.heldWeapon, [.1, .2, .18], [.22, 1.29, -.48], 0x4d5c58);
+    if (definition.kind === 'melee') {
+      const handle = box(this.heldWeapon, [.07, .70, .07], [.22, 1.42, -.63], 0x765039); handle.rotation.x = -.45;
+      const head = box(this.heldWeapon, [.36, .18, .10], [.22, 1.70, -.86], 0x879596); head.rotation.x = -.45;
+    } else {
+      box(this.heldWeapon, [definition.id === 'heavy-machine-gun' ? .24 : .13, definition.kind === 'flame' ? .24 : .15, length], [.22, 1.42, -.48 - length / 2], definition.kind === 'flame' ? 0x3b4b45 : 0x263438);
+      box(this.heldWeapon, [.1, .2, .18], [.22, 1.29, -.48], 0x4d5c58);
+      if (definition.kind === 'flame') for (const x of [.10, .34]) box(this.heldWeapon, [.12, .34, .14], [x, 1.25, -.62], 0x8b633f);
+      if (definition.id === 'heavy-machine-gun') box(this.heldWeapon, [.28, .30, .28], [.08, 1.24, -.66], 0x59604b);
+    }
     this.flash.position.set(.22, 1.42, -.52 - length);
   }
 
@@ -105,7 +115,7 @@ export class PartnerView extends THREE.Group {
     if (!this.initialized) { this.position.copy(destination); this.initialized = true; }
     this.position.lerp(destination, 1 - Math.exp(-delta * 16)); this.rotation.y = p.yaw;
     if (p.shots > this.shots) this.flashUntil = time + .08;
-    this.shots = p.shots; this.flash.visible = time < this.flashUntil && p.health > 0; this.heldWeapon.visible = p.health > 0;
+    this.shots = p.shots; this.flash.visible = time < this.flashUntil && p.health > 0 && WEAPONS[p.weapon]?.kind !== 'melee'; this.heldWeapon.visible = p.health > 0;
     const nextAction = p.health <= 0 ? 'Death' : p.reloading ? 'PickUp' : time < this.flashUntil ? 'Shoot_OneHanded' : p.height > .06 ? 'Jump' : moving ? 'Run_Carry' : 'Idle';
     this.play(nextAction);
     const reloadAction = p.reloading ? this.actions.get('PickUp') : undefined;

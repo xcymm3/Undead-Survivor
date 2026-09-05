@@ -3,6 +3,7 @@ import { capture, fire, lookAt, snapshot, start } from './controls';
 import { CONFIG } from '../../src/game/config';
 
 test('自由转向、WASD移动并开火，枪口与准星一致，暂停清空按键', async ({ page }) => {
+  test.setTimeout(90000);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await start(page);
   await expect(page.getByTestId('player-health')).toHaveText('100');

@@ -1,12 +1,12 @@
 # Undead Survivor Windows 便携版
 
-当前发布目标：本地构建为 `Undead Survivor-0.7.3.exe`，GitHub Release 附件为 `Undead-Survivor-0.7.3.exe`。支持 Windows 10/11 x64，包含自由移动、视角导向跳跃、波次生存、排行榜、鼠标灵敏度和五档画质设置，以及带角色外貌选择的 Steam 2～4 人合作模式。
+当前发布目标：本地构建为 `Undead Survivor-0.7.4.exe`，GitHub Release 附件为 `Undead-Survivor-0.7.4.exe`。支持 Windows 10/11 x64，包含十款武器、右键抬枪、自由移动、视角导向跳跃、波次生存、排行榜、鼠标灵敏度和五档画质设置，以及带角色外貌选择的 Steam 2～4 人合作模式。
 
 ## 使用与分发
 
 将 EXE 放在可写入的文件夹，双击启动。无需 Node.js、Chrome 或本地服务器，首次启动会自动解压内置运行环境到临时目录。单人模式可离线游玩；多人模式要求每名玩家分别登录不同的 Steam 账号。
 
-联机的准备、创建/搜索/加入房间、操作与问题排查请阅读 [EXE 联机说明](MULTIPLAYER.md)。发给朋友时附上 Release 中的 `Multiplayer-Guide-0.7.3.txt` 即可，不需要源码或 `win-unpacked`。
+联机的准备、创建/搜索/加入房间、操作与问题排查请阅读 [EXE 联机说明](MULTIPLAYER.md)。发给朋友时附上 Release 中的 `Multiplayer-Guide-0.7.4.txt` 即可，不需要源码或 `win-unpacked`。
 
 EXE 旁自动创建 `Undead Survivor Data`，保存本机排行榜、设置与缓存。迁移自己的游戏时将 EXE 和数据文件夹一起移动；发给朋友时不要附上个人数据。新旧版使用相同数据目录，升级时可把新版放在旧版旁，避免同时运行两版。
 
@@ -34,7 +34,7 @@ npm run test:portable
 
 入口 `desktop/main.cjs` 使用私有 `undead://game/` 协议读取包内资源，无需 HTTP 服务。启用沙箱、上下文隔离与内容安全策略，不向页面开放 Node API，生产包没有游戏诊断接口。正常启动不开调试端口，只有自动验收临时建立本机调试连接。
 
-0.6.0 已完成双机双账号 Spacewar 联机试玩；发现的客机画质和同步问题已在后续源码中优化。0.7.3 的角色外貌和 2～4 人协议仍需用对应数量的电脑和 Steam 账号继续实机验收。成品测试的本机 Steam 状态与具体结果记录在测试目录的 `result.json` 中。
+0.6.0 已完成双机双账号 Spacewar 联机试玩；发现的客机画质和同步问题已在后续源码中优化。0.7.4 的角色外貌和 2～4 人协议仍需用对应数量的电脑和 Steam 账号继续实机验收。成品测试的本机 Steam 状态与具体结果记录在测试目录的 `result.json` 中。
 
 ## 0.6.0 成品记录（2026-09-04）
 
@@ -44,3 +44,5 @@ npm run test:portable
 - 实际便携 EXE 两次静默启动、窗口状态、原生依赖与五项 Steam DLL 绑定、离线资源、中文路径搬迁后的设置保存、正常退出均通过，页面错误为零。本机 Steam 未就绪提示正常，未进行实际双账号联网。
 - 本次成品证据：`test-results/portable-1788518396952/result.json`。
 - 旧 0.5.0 EXE 保留，哈希未改变；本轮自动验证没有启动旧版。
+
+\n

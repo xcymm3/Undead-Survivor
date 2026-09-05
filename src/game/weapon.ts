@@ -99,7 +99,87 @@ export function prepareWeapon(model: THREE.Group, definition: WeaponDefinition) 
     model.updateMatrixWorld(true);
   };
   sample('idle');
-  return { holder, model, sample, muzzleZ, clips, mixer, rest, diagnostics: () => ({ kind: lastKind, progress: lastProgress, bones: rest.filter(p => p.node instanceof THREE.Bone).map(p => ({ name: p.node.name, position: p.node.position.toArray(), quaternion: p.node.quaternion.toArray() })) }) };
+  const dispose = () => {
+    mixer.stopAllAction(); mixer.uncacheRoot(model);
+    model.traverse(node => { if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose(); });
+  };
+  return { holder, model, sample, muzzleZ, clips, mixer, rest, dispose, diagnostics: () => ({ kind: lastKind, progress: lastProgress, bones: rest.filter(p => p.node instanceof THREE.Bone).map(p => ({ name: p.node.name, position: p.node.position.toArray(), quaternion: p.node.quaternion.toArray() })) }) };
+}
+
+export function prepareProceduralWeapon(definition: WeaponDefinition) {
+  const holder = new THREE.Group(), model = new THREE.Group(); holder.add(model);
+  const moving: THREE.Object3D[] = [];
+  const part = (name: string, size: [number, number, number], position: [number, number, number], color: number, animated = false) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color, roughness: .72, metalness: .18, flatShading: true }));
+    mesh.scale.set(...size); mesh.position.set(...position); model.add(mesh); mesh.name = name; mesh.castShadow = false; mesh.receiveShadow = false;
+    if (animated) moving.push(mesh); return mesh;
+  };
+  const tube = (name: string, radius: number, length: number, position: [number, number, number], color: number, animated = false) => {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 8), new THREE.MeshStandardMaterial({ color, roughness: .58, metalness: .28, flatShading: true }));
+    mesh.name = name; mesh.rotation.x = Math.PI / 2; mesh.position.set(...position); model.add(mesh);
+    if (animated) moving.push(mesh); return mesh;
+  };
+  if (definition.id === 'axe') {
+    const handle = part('Handle', [.075, .075, .88], [.08, -.04, -.38], 0x765039, true);
+    handle.rotation.x = -.13;
+    part('AxeHead', [.34, .24, .085], [.08, .015, -.80], 0x7e8c8c, true);
+    part('AxeEdge', [.37, .15, .035], [.08, .005, -.855], 0xc0cac5, true);
+  } else if (definition.id === 'flamethrower') {
+    part('Body', [.32, .24, .55], [.05, -.04, -.28], 0x3b4b45);
+    tube('Nozzle', .055, .62, [.04, .03, -.70], 0x596967, true);
+    tube('FuelTankA', .12, .38, [-.14, -.16, -.24], 0x8b633f, true);
+    tube('FuelTankB', .12, .38, [.14, -.16, -.24], 0x8b633f, true);
+    part('Grip', [.12, .30, .14], [.05, -.23, -.20], 0x283633);
+    part('Pilot', [.12, .09, .16], [.04, .03, -.99], 0xb55e2c, true);
+  } else if (definition.id === 'auto-shotgun') {
+    part('Receiver', [.28, .24, .48], [.05, -.02, -.27], 0x344248);
+    tube('Barrel', .045, .72, [.05, .04, -.73], 0x263238);
+    tube('TubeMagazine', .055, .62, [.05, -.10, -.68], 0x52605d);
+    part('BoxMagazine', [.18, .32, .20], [.06, -.23, -.24], 0x2a3538, true);
+    part('Bolt', [.09, .08, .18], [.19, .03, -.25], 0x9aa19a, true);
+    part('Stock', [.24, .28, .38], [.05, -.06, .16], 0x58614d);
+    part('FrontSight', [.035, .12, .035], [.05, .13, -.94], 0xd0c58f);
+    part('RearSight', [.12, .08, .035], [.05, .12, -.12], 0x87918a);
+  } else {
+    part('Receiver', [.36, .30, .56], [.04, -.03, -.31], 0x344047);
+    tube('HeavyBarrel', .065, .74, [.04, .04, -.80], 0x273137);
+    tube('CoolingJacket', .105, .42, [.04, .04, -.61], 0x48565a);
+    part('AmmoBox', [.34, .38, .30], [-.13, -.25, -.25], 0x59604b, true);
+    const belt = part('AmmoBelt', [.34, .07, .10], [-.08, -.03, -.16], 0xc0a55d, true); belt.rotation.z = -.18;
+    part('ChargingHandle', [.18, .055, .12], [.25, .04, -.30], 0x9ba286, true);
+    part('Stock', [.30, .31, .42], [.04, -.08, .17], 0x2c3739);
+    part('FrontSight', [.035, .14, .035], [.04, .16, -1.02], 0xd0c58f);
+    part('RearSight', [.14, .09, .035], [.04, .145, -.16], 0x87918a);
+  }
+  moving.unshift(model);
+  const rests = moving.map(node => ({ node, position: node.position.clone(), quaternion: node.quaternion.clone() }));
+  let lastKind: WeaponAnimation = 'idle', lastProgress = 1;
+  const restore = () => rests.forEach(value => { value.node.position.copy(value.position); value.node.quaternion.copy(value.quaternion); });
+  const sample = (kind: WeaponAnimation, progress = 0) => {
+    lastKind = kind; lastProgress = progress; restore();
+    const p = THREE.MathUtils.clamp(progress, 0, 1), pulse = Math.sin(Math.PI * p);
+    if (kind === 'fire') {
+      if (definition.id === 'axe') model.rotation.set(-pulse * 1.05, pulse * .25, pulse * .38);
+      else {
+        const bolt = model.getObjectByName(definition.id === 'auto-shotgun' ? 'Bolt' : definition.id === 'heavy-machine-gun' ? 'ChargingHandle' : 'Nozzle');
+        if (bolt) bolt.position.z += pulse * .10;
+        model.position.z = pulse * .045;
+      }
+    } else if (kind === 'reload') {
+      const magazine = model.getObjectByName(definition.id === 'flamethrower' ? 'FuelTankA' : definition.id === 'auto-shotgun' ? 'BoxMagazine' : 'AmmoBox');
+      if (magazine) {
+        const out = p < .45 ? Math.sin(Math.PI * p / .9) : Math.sin(Math.PI * (1 - p) / 1.1);
+        magazine.position.y -= Math.max(0, out) * .38;
+      }
+      const secondTank = model.getObjectByName('FuelTankB'); if (secondTank) secondTank.position.y -= Math.sin(Math.PI * p) * .38;
+      const handle = model.getObjectByName('ChargingHandle'); if (handle && p > .72) handle.position.z += Math.sin(Math.PI * (p - .72) / .28) * .16;
+    }
+    if (kind === 'idle' || progress >= 1) { model.position.set(0, 0, 0); model.rotation.set(0, 0, 0); restore(); }
+    model.updateMatrixWorld(true);
+  };
+  sample('idle');
+  return { holder, model, sample, muzzleZ: -definition.length * .78, dispose: () => disposeModel(holder), diagnostics: () => ({ kind: lastKind, progress: lastProgress,
+    bones: moving.map(node => ({ name: node.name, position: node.position.toArray(), quaternion: node.quaternion.toArray() })) }) };
 }
 
 export class WeaponView {
@@ -108,7 +188,7 @@ export class WeaponView {
   readonly flash = new THREE.Group();
   readonly light = new THREE.PointLight(0xffc36b, 0, 8, 2);
   readonly ready: Promise<void>;
-  private rigs: ReturnType<typeof prepareWeapon>[] = [];
+  private rigs: (ReturnType<typeof prepareWeapon> | ReturnType<typeof prepareProceduralWeapon>)[] = [];
   private active = 0;
   private disposed = false;
   loaded = false;
@@ -118,9 +198,10 @@ export class WeaponView {
     flame.scale.set(0.75, 0.75, 2.6); flame.position.z = -0.065; this.flash.add(flame); this.flash.visible = false;
     const loader = new FBXLoader();
     this.ready = Promise.all(WEAPONS.map(async definition => {
-      const model = await loader.loadAsync(`${import.meta.env.BASE_URL}models/weapons/${definition.model}.fbx`);
-      const rig = prepareWeapon(model, definition);
-      if (this.disposed) { disposeModel(rig.holder); return null; }
+      const rig = definition.procedural
+        ? prepareProceduralWeapon(definition)
+        : prepareWeapon(await loader.loadAsync(`${import.meta.env.BASE_URL}models/weapons/${definition.model}.fbx`), definition);
+      if (this.disposed) { rig.dispose(); if (!definition.procedural) disposeModel(rig.holder); return null; }
       rig.holder.visible = false; this.root.add(rig.holder); return rig;
     })).then(rigs => {
       if (this.disposed) return;
@@ -134,11 +215,8 @@ export class WeaponView {
     this.flash.visible = false; this.light.intensity = 0;
   }
   animate(kind: WeaponAnimation, progress: number) { this.rigs[this.active]?.sample(kind, progress); }
-  diagnostics() { return { loaded: this.loaded, model: WEAPONS[this.active].model, visibleModels: this.rigs.filter(rig => rig.holder.visible).length, ...this.rigs[this.active]?.diagnostics() }; }
-  dispose() { this.disposed = true; this.rigs.forEach(rig => {
-    rig.mixer.stopAllAction(); rig.mixer.uncacheRoot(rig.model);
-    rig.model.traverse(node => { if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose(); });
-  }); }
+  diagnostics() { return { loaded: this.loaded, model: WEAPONS[this.active].model, attachedModels: this.rigs.filter(rig => rig.holder.parent === this.root).length, visibleModels: this.rigs.filter(rig => rig.holder.visible).length, ...this.rigs[this.active]?.diagnostics() }; }
+  dispose() { this.disposed = true; this.rigs.forEach(rig => rig.dispose()); }
 }
 function disposeModel(root: THREE.Object3D) {
   root.traverse(node => { if (node instanceof THREE.Mesh) { if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose(); node.geometry.dispose(); (Array.isArray(node.material) ? node.material : [node.material]).forEach(m => m.dispose()); } });

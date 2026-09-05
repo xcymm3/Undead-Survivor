@@ -105,9 +105,15 @@ export class GameAudio {
     gain.linearRampToValueAtTime(MUSIC_LEVEL, this.duckUntil + 0.35);
   }
 
-  shot() {
+  shot(kind: 'gun' | 'melee' | 'flame' | undefined = 'gun') {
     const ctx = this.context;
     if (!ctx || !this.master || !this.enabled || this.level === 0 || ctx.state !== 'running') return;
+    if (kind === 'melee') {
+      this.duckMusic(.16);
+      this.tone(240, 70, .15, .055, 'sawtooth');
+      this.tone(760, 190, .09, .025, 'triangle', .055);
+      return;
+    }
     this.duckMusic();
     if (!this.noise) {
       this.noise = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
@@ -118,16 +124,17 @@ export class GameAudio {
     noise.buffer = this.noise;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(3400, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + 0.18);
+    filter.frequency.setValueAtTime(kind === 'flame' ? 1800 : 3400, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(kind === 'flame' ? 620 : 280, ctx.currentTime + (kind === 'flame' ? .09 : 0.18));
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.21, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.24);
+    gain.gain.setValueAtTime(kind === 'flame' ? .065 : 0.21, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (kind === 'flame' ? .10 : 0.24));
     noise.connect(filter).connect(gain).connect(this.master);
     noise.onended = () => { noise.disconnect(); filter.disconnect(); gain.disconnect(); };
     noise.start();
-    noise.stop(ctx.currentTime + 0.26);
-    this.tone(140, 44, 0.17, 0.12);
+    noise.stop(ctx.currentTime + (kind === 'flame' ? .11 : 0.26));
+    if (kind === 'flame') this.tone(96, 72, .08, .018, 'sawtooth');
+    else this.tone(140, 44, 0.17, 0.12);
   }
 
   mechanical(kind: 'release' | 'eject' | 'insert' | 'action' | 'shell' | 'close') {

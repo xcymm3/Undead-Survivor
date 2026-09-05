@@ -13,6 +13,7 @@ import { scheduleFrame } from './frameTiming';
 import { GameAudio } from './audio';
 import { Arsenal } from './arsenal';
 import { WEAPONS } from './weapons';
+import type { WeaponDefinition } from './weapons';
 import { cube, material } from './geometry';
 import { WeaponView } from './weapon';
 import { createWorld } from './world';
@@ -31,6 +32,7 @@ import type { Match, Pawn } from '../multiplayer/types';
 import { DEFAULT_LOOK_SENSITIVITY, loadLookSensitivity, LOOK_SENSITIVITY_STORAGE_KEY, lookSensitivityRadians, normalizeLookSensitivity } from './controls';
 import type { PlayerAppearance } from '../multiplayer/appearance';
 import { crossedReloadStage, reloadPose, reloadStage } from './reloadAnimation';
+import { resolveWeaponHits } from './ballistics';
 
 interface Effect { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; gravity: number; spin: boolean; shrink: boolean; }
 interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: boolean, killed: boolean, armorBroken: boolean) => void; onError: (message: string) => void; onEnd: (result: RunResult) => void; }
@@ -68,11 +70,14 @@ export class Game {
   private aim = new THREE.Vector2();
   private view = new THREE.Vector2();
   private aimPoint = new THREE.Vector3();
+  private ballisticMuzzle = new THREE.Vector3();
   private raycaster = new THREE.Raycaster();
   private effects: Effect[] = [];
   private hitCount = 0;
   private kills = 0;
   private trigger = false;
+  private aiming = false;
+  private aimBlend = 0;
   private recoil = 0;
   private flashTime = 0;
   private displayedWeapon = 0;
@@ -83,6 +88,7 @@ export class Game {
   private elapsed = 0;
   private frameId = 0;
   private previousTime = 0;
+  private lastAdvanceAt = performance.now();
   private frameDeadline = 0;
   private dirty = true;
   private renderCount = 0;
@@ -119,7 +125,7 @@ export class Game {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.domElement.setAttribute('aria-label', '灰松哨站 3D 射击场景，WASD 移动，鼠标自由转向，左键开火');
+    this.renderer.domElement.setAttribute('aria-label', '灰松哨站 3D 射击场景，WASD 移动，鼠标自由转向，左键攻击，右键抬枪');
     this.renderer.domElement.setAttribute('data-testid', 'game-canvas');
     this.renderer.domElement.tabIndex = 0;
     host.appendChild(this.renderer.domElement);
@@ -142,11 +148,11 @@ export class Game {
     this.resize();
     this.renderer.domElement.addEventListener('pointermove', this.pointerMove);
     this.renderer.domElement.addEventListener('pointerdown', this.pointerDown);
-    this.renderer.domElement.addEventListener('pointerleave', this.releaseTrigger);
-    this.renderer.domElement.addEventListener('pointercancel', this.releaseTrigger);
+    this.renderer.domElement.addEventListener('pointerleave', this.cancelPointerInput);
+    this.renderer.domElement.addEventListener('pointercancel', this.cancelPointerInput);
     this.renderer.domElement.addEventListener('contextmenu', this.contextMenu);
     this.renderer.domElement.addEventListener('webglcontextlost', this.contextLost);
-    window.addEventListener('pointerup', this.releaseTrigger);
+    window.addEventListener('pointerup', this.pointerUp);
     window.addEventListener('blur', this.blur);
     window.addEventListener('focus', this.focus);
     window.addEventListener('keydown', this.keyDown);
@@ -211,7 +217,7 @@ export class Game {
   };
   private keyUp = (event: KeyboardEvent) => { this.keys.delete(event.code); };
   private clearInput() {
-    this.keys.clear(); this.playerMotion.clearInput(); this.trigger = false;
+    this.keys.clear(); this.playerMotion.clearInput(); this.trigger = false; this.aiming = false; this.aimBlend = 0;
     this.coop?.sendInput(this.keys, this.view.x, this.view.y, this.jumpSequence, 1);
     if (this.pointerLocked) document.exitPointerLock();
   }
@@ -224,20 +230,26 @@ export class Game {
   };
 
   private pointerDown = (event: PointerEvent) => {
-    if (this.phase !== 'playing' || event.button !== 0) return;
+    if (this.phase !== 'playing' || (event.button !== 0 && event.button !== 2)) return;
     event.preventDefault();
     this.renderer.domElement.focus({ preventScroll: true });
     if (this.coop?.local.health === 0) {
-      if (!this.pointerLocked) this.requestPointerLock(); else this.cycleSpectator();
+      if (!this.pointerLocked) this.requestPointerLock(); else if (event.button === 0) this.cycleSpectator();
       return;
     }
     if (!this.pointerLocked) { this.requestPointerLock(); return; }
+    if (event.button === 2) { this.aiming = true; this.dirty = true; this.publish(); return; }
     this.audio.unlock();
     this.trigger = this.firearm.definition.automatic;
     this.updateAim(0);
     this.shoot();
   };
   private releaseTrigger = () => { this.trigger = false; };
+  private pointerUp = (event: PointerEvent) => {
+    if (event.button === 0) this.releaseTrigger();
+    if (event.button === 2) { this.aiming = false; this.dirty = true; this.publish(); }
+  };
+  private cancelPointerInput = () => { this.trigger = false; this.aiming = false; };
   private contextMenu = (event: Event) => event.preventDefault();
   private contextLost = (event: Event) => {
     event.preventDefault();
@@ -255,7 +267,13 @@ export class Game {
     if (this.phase !== 'playing') return;
     if (event.code === 'Space') { event.preventDefault(); if (this.pointerLocked && (!this.coop || this.coop.local.health > 0)) { this.playerMotion.jump(); this.jumpSequence++; } }
     if (/^Key[WASD]$/.test(event.code)) { event.preventDefault(); if (this.pointerLocked) this.keys.add(event.code); }
-    if (/^(Digit|Numpad)[1-6]$/.test(event.code)) { event.preventDefault(); this.switchWeapon(Number(event.code.slice(-1)) - 1); }
+    const weaponKey = /^(?:Digit|Numpad)([0-9])$/.exec(event.code);
+    if (weaponKey) {
+      event.preventDefault();
+      const digit = Number(weaponKey[1]);
+      const index = digit === 0 ? 9 : digit - 1;
+      if (index < WEAPONS.length) this.switchWeapon(index);
+    }
     if (event.code === 'KeyR') { event.preventDefault(); this.reload(); }
     if (event.code === 'KeyM') this.setSound(!this.audio.enabled);
   };
@@ -263,7 +281,7 @@ export class Game {
   switchWeapon(index: number) {
     if (this.coop?.local.health === 0) return;
     if (this.phase !== 'playing' || !this.weapon.loaded) return;
-    this.releaseTrigger(); this.flashTime = 0;
+    this.releaseTrigger(); this.aiming = false; this.flashTime = 0;
     this.arsenal.request(index); this.publish();
     this.coop?.command({ type: 'weapon', index });
   }
@@ -279,7 +297,7 @@ export class Game {
     if (!this.weapon.loaded) return;
     if (this.phase === 'failed' || this.phase === 'breaching') return;
     this.phase = 'playing';
-    this.keys.clear(); this.trigger = false;
+    this.keys.clear(); this.trigger = false; this.aiming = false; this.aimBlend = 0;
     this.requestPointerLock();
     this.previousTime = 0; this.frameDeadline = 0;
     this.dirty = true;
@@ -339,11 +357,20 @@ export class Game {
     this.coopTimer = setInterval(() => {
       if (!this.coop || this.phase === 'failed') return;
       // 队员同样推进武器与结算，避免切出窗口后换弹冻结或错过全员阵亡快照。
-      if (this.background) {
+      // 某些 Chromium/Electron 环境会停掉 RAF 却仍报告页面可见，以最后推进时间作为兜底。
+      const now = performance.now();
+      const wasBackground = this.background;
+      if (wasBackground || now - this.lastAdvanceAt > 120) {
+        // Chromium 会把后台计时器降到每秒一次，固定推进 50 ms 会让房主世界变成 1/20 速度。
+        // Encounter 内部会分成 50 ms 小步补算；这里只发一次最终快照，避免恢复时突发占用带宽。
+        const delta = Math.min(1, Math.max(.001, (now - this.lastAdvanceAt) / 1000));
         const previousWeapon = this.arsenal.active;
-        this.arsenal.update(.05);
+        this.arsenal.update(delta);
         if (this.arsenal.active !== previousWeapon) { this.weapon.select(this.arsenal.active); this.displayedWeapon = this.arsenal.active; }
-        this.advanceCoop(.05); this.publish();
+        this.advanceCoop(delta);
+        // 前台 RAF 只是短暂阻塞时，避免下一帧把已补算时间再推进一次。
+        if (!wasBackground) { this.previousTime = now; this.frameDeadline = now; }
+        this.publish(); this.lastAdvanceAt = now;
       }
       if (performance.now() - this.coop.lastPacketAt > 20000) {
         this.callbacks.onError('队友同步已中断，请重新连接房间。');
@@ -529,11 +556,27 @@ export class Game {
     const viewX = Math.min(0.38, Math.tan(THREE.MathUtils.degToRad(CONFIG.camera.fov / 2)) * this.camera.aspect * 0.8);
     const viewY = definition.length < 0.6 ? -0.32 : -0.40;
     const pose = reloadPose(definition, reloadProgress, reloadEmpty);
-    this.weapon.root.position.set(viewX * .5 + pose.x, (viewY - drop * 1.45 - this.recoil * .025) * .5 + pose.y, -.38 + this.recoil * .04 + pose.z);
     const localTarget = this.camera.worldToLocal(this.aimPoint.clone());
+    const hipPosition = new THREE.Vector3(viewX * .5 + pose.x, (viewY - drop * 1.45 - this.recoil * .025) * .5 + pose.y, -.38 + this.recoil * .04 + pose.z);
+    this.weapon.root.position.copy(hipPosition);
     this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, visualWeaponTarget(localTarget)));
     this.weapon.root.rotateX(pose.rx); this.weapon.root.rotateY(pose.ry); this.weapon.root.rotateZ(pose.rz - drop * .20);
     this.weapon.root.updateMatrixWorld(true);
+    // 弹道始终取腰射姿态下的枪口。右键只移动第一人称模型，不改变命中、散布或伤害。
+    this.weapon.muzzle.getWorldPosition(this.ballisticMuzzle);
+    const wantsAim = this.aiming && !spectated && !gun.reloading && !this.arsenal.switching;
+    this.aimBlend = delta > 0 ? THREE.MathUtils.damp(this.aimBlend, wantsAim ? 1 : 0, 18, delta) : this.aimBlend;
+    if (this.aimBlend > 0.0001) {
+      const adsPosition = new THREE.Vector3(...definition.ads);
+      this.weapon.root.position.lerpVectors(hipPosition, adsPosition, this.aimBlend);
+      this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, visualWeaponTarget(localTarget)));
+      const reloadWeight = 1 - this.aimBlend;
+      this.weapon.root.rotateX(pose.rx * reloadWeight);
+      this.weapon.root.rotateY(pose.ry * reloadWeight);
+      this.weapon.root.rotateZ((pose.rz - drop * .20) * reloadWeight);
+      if (definition.kind === 'melee') this.weapon.root.rotateZ(-.22 * this.aimBlend);
+      this.weapon.root.updateMatrixWorld(true);
+    }
   }
 
   private addEffect(position: THREE.Vector3, velocity: THREE.Vector3, scale: THREE.Vector3, color: number, life: number, gravity = 0, spin = false, shrink = true, emissive = false) {
@@ -546,39 +589,64 @@ export class Game {
   }
   private tracerMaterial = new THREE.MeshBasicMaterial({ color: 0xffdf9b });
 
+  private traceWeapon(origin: THREE.Vector3, direction: THREE.Vector3, definition: WeaponDefinition) {
+    const range = definition.range ?? CONFIG.weapon.range;
+    this.raycaster.set(origin, direction); this.raycaster.far = range;
+    const hits = this.raycaster.intersectObjects(this.activeSurfaces(), false);
+    const resolved = resolveWeaponHits(hits, hit => hit.object === this.zombieField, Boolean(definition.piercing));
+    return { ...resolved, end: resolved.impact?.point ?? origin.clone().addScaledVector(direction, range) };
+  }
+
+  private addShotEffect(origin: THREE.Vector3, end: THREE.Vector3, direction: THREE.Vector3, definition: WeaponDefinition) {
+    if (this.background || definition.kind === 'melee') return;
+    if (definition.kind === 'flame') {
+      for (let i = 0; i < 5; i++) {
+        const distance = .25 + Math.random() * Math.min(2.3, origin.distanceTo(end));
+        const position = origin.clone().addScaledVector(direction, distance);
+        position.x += (Math.random() - .5) * .15; position.y += (Math.random() - .5) * .12;
+        const velocity = direction.clone().multiplyScalar(3.5 + Math.random() * 2.5); velocity.y += .35;
+        this.addEffect(position, velocity, new THREE.Vector3().setScalar(.055 + Math.random() * .09), i < 2 ? 0xffe08a : 0xff6a24, .13 + Math.random() * .13, 0, false, true, true);
+      }
+      return;
+    }
+    const tracer = this.addEffect(origin.clone().lerp(end, .5), new THREE.Vector3(), new THREE.Vector3(.015, .015, origin.distanceTo(end)), 0, .045, 0, false, false, true);
+    tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
+  }
+
   private remoteShoot = (pawn: Pawn, arsenal: Arsenal) => {
     if (pawn.health <= 0 || !arsenal.fire()) return;
     this.zombieField.sync(this.encounter); this.scene.updateMatrixWorld(true);
+    const gun = arsenal.gun.definition;
     const camera = new THREE.PerspectiveCamera(); camera.position.set(pawn.x, 1.7 + pawn.height, pawn.z);
     camera.rotation.set(pawn.pitch, pawn.yaw, 0, 'YXZ'); camera.updateMatrixWorld();
     this.raycaster.setFromCamera(new THREE.Vector2(), camera); this.raycaster.far = CONFIG.weapon.range;
     const aim = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0]?.point ?? this.raycaster.ray.at(CONFIG.weapon.range, new THREE.Vector3());
     const muzzle = new THREE.Vector3(.24, -.18, -.5).applyQuaternion(camera.quaternion).add(camera.position);
     const center = aim.clone().sub(muzzle).normalize(), right = new THREE.Vector3().crossVectors(center, camera.up).normalize();
-    const up = new THREE.Vector3().crossVectors(right, center).normalize(), gun = arsenal.gun.definition;
+    const up = new THREE.Vector3().crossVectors(right, center).normalize();
     let landed = false, head = false, killed = false, armorBroken = false;
+    const damaged = new Set<number>();
     for (let i = 0; i < gun.pellets; i++) {
       const angle = i * 2.399963229728653, radius = gun.spread * Math.sqrt(i / Math.max(1, gun.pellets - 1));
       const direction = center.clone().addScaledVector(right, Math.cos(angle) * radius).addScaledVector(up, Math.sin(angle) * radius).normalize();
-      this.raycaster.set(muzzle, direction); const hit = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0];
-      const target = this.zombieField.decode(hit);
-      if (target) {
-        const damage = this.encounter.hit(target.id, target.head, gun.damage * (target.head ? 2 : 1));
+      const trace = this.traceWeapon(muzzle, direction, gun);
+      for (const hit of trace.targets) {
+        const target = this.zombieField.decode(hit)!;
+        if ((gun.piercing || gun.kind === 'melee') && damaged.has(target.id)) continue;
+        damaged.add(target.id);
+        const multiplier = target.head ? gun.headshotMultiplier ?? 2 : 1;
+        const damage = this.encounter.hit(target.id, target.head, gun.damage * multiplier);
         if (damage) {
           if (!this.background && damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(target.id, damage.armorHit), direction);
-          if (!this.background && damage.killed && hit) this.blood.burst(hit.point, direction, target.head);
+          if (!this.background && damage.killed) this.blood.burst(hit.point, direction, target.head);
           landed = true; head ||= target.head; killed ||= damage.killed; armorBroken ||= damage.armorBroken;
         }
         this.zombieField.sync(this.encounter); this.scene.updateMatrixWorld(true);
       }
-      if (!this.background) {
-        const end = hit?.point ?? muzzle.clone().addScaledVector(direction, CONFIG.weapon.range);
-        const tracer = this.addEffect(muzzle.clone().lerp(end, .5), new THREE.Vector3(), new THREE.Vector3(.015, .015, muzzle.distanceTo(end)), 0, .06, 0, false, false, true);
-        tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
-      }
+      this.addShotEffect(muzzle, trace.end, direction, gun);
     }
     if (landed) this.coop?.sendHit(pawn.id, head, killed, armorBroken);
-    if (!this.background) this.audio.shot();
+    if (!this.background) this.audio.shot(gun.kind);
   };
 
   private advanceCoop(delta: number) {
@@ -622,7 +690,7 @@ export class Game {
     }
     this.encounter.health = local.health; this.encounter.lastDamageAt = local.lastDamageAt; this.kills = this.encounter.kills;
     this.weapon.root.visible = local.health > 0 || coop.remotes.some(player => player.health > 0);
-    if (local.health === 0) { this.keys.clear(); this.trigger = false; }
+    if (local.health === 0) { this.keys.clear(); this.trigger = false; this.aiming = false; }
     const spectated = this.spectatedPlayer();
     for (const player of coop.remotes) this.partners.get(player.id)?.update(player, delta, player.id === spectated?.id, this.encounter.elapsed);
     if (this.encounter.failed) this.endRun();
@@ -632,56 +700,57 @@ export class Game {
     if (this.coop?.local.health === 0) return;
     if (this.phase !== 'playing' || !this.weapon.loaded || !this.arsenal.fire()) return;
     this.coop?.command({ type: 'fire', yaw: this.view.x, pitch: this.view.y });
-    this.audio.shot();
-    this.flashTime = 0.065;
-    this.recoil = Math.min(1, this.recoil + this.firearm.definition.recoil);
-    const muzzle = this.weapon.muzzle.getWorldPosition(new THREE.Vector3());
-    const centerDirection = this.aimPoint.clone().sub(muzzle).normalize();
     const definition = this.firearm.definition;
+    this.audio.shot(definition.kind);
+    this.flashTime = definition.kind === 'melee' ? 0 : 0.065;
+    this.recoil = Math.min(1, this.recoil + definition.recoil);
+    const muzzle = this.ballisticMuzzle.clone();
+    const visualMuzzle = this.weapon.muzzle.getWorldPosition(new THREE.Vector3());
+    const centerDirection = this.aimPoint.clone().sub(muzzle).normalize();
     const right = new THREE.Vector3().crossVectors(centerDirection, this.camera.up).normalize();
     const up = new THREE.Vector3().crossVectors(right, centerDirection).normalize();
     let landed = false;
+    const damaged = new Set<number>();
     for (let pellet = 0; pellet < definition.pellets; pellet++) {
       const angle = pellet * 2.399963229728653;
       const radius = definition.spread * Math.sqrt(pellet / Math.max(1, definition.pellets - 1));
       const direction = centerDirection.clone().addScaledVector(right, Math.cos(angle) * radius).addScaledVector(up, Math.sin(angle) * radius).normalize();
-      this.raycaster.set(muzzle, direction);
-      this.raycaster.far = CONFIG.weapon.range;
-      // 从枪口再测一次遮挡，防止摄像机能看见但枪管被前景挡住时穿透。
-      const hit = this.raycaster.intersectObjects(this.activeSurfaces(), false)[0];
-      const end = hit?.point ?? muzzle.clone().addScaledVector(direction, CONFIG.weapon.range);
-      const length = muzzle.distanceTo(end);
-      const tracer = this.addEffect(muzzle.clone().lerp(end, 0.5), new THREE.Vector3(), new THREE.Vector3(0.015, 0.015, length), 0, 0.045, 0, false, false, true);
-      tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
-      const targetHit = this.zombieField.decode(hit);
-      const targetId = targetHit?.id;
-      let killed = false;
-      if (pellet === 0) this.lastShot = { muzzle: muzzle.toArray(), direction: direction.toArray(), aimPoint: this.aimPoint.toArray(), impact: end.toArray(), hitTarget: targetId ?? null };
-      if (targetHit && (!this.coop || this.coop.host)) {
+      // 从腰射枪口重新检测遮挡；右键举枪不会改变此处的弹道起点。
+      const trace = this.traceWeapon(muzzle, direction, definition);
+      const firstTarget = this.zombieField.decode(trace.targets[0]);
+      if (pellet === 0) this.lastShot = { muzzle: muzzle.toArray(), direction: direction.toArray(), aimPoint: this.aimPoint.toArray(), impact: trace.end.toArray(), hitTarget: firstTarget?.id ?? null };
+      this.addShotEffect(visualMuzzle, trace.end, direction, definition);
+      let killedAtImpact = false;
+      for (const hit of trace.targets) {
+        const targetHit = this.zombieField.decode(hit)!;
+        if ((definition.piercing || definition.kind === 'melee') && damaged.has(targetHit.id)) continue;
+        damaged.add(targetHit.id);
+        if (this.coop && !this.coop.host) continue;
         const head = targetHit.head;
-        const damage = this.encounter.hit(targetHit.id, head, definition.damage * (head ? 2 : 1))!;
+        const multiplier = head ? definition.headshotMultiplier ?? 2 : 1;
+        const damage = this.encounter.hit(targetHit.id, head, definition.damage * multiplier)!;
         if (damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(targetHit.id, damage.armorHit), direction);
         // 立即同步外观与碰撞，避免同一帧继续命中已经脱落的护具。
         this.zombieField.sync(this.encounter);
         this.scene.updateMatrixWorld(true);
-        killed = damage.killed;
-        if (killed) { this.blood.burst(end, direction, head); this.audio.death(); }
+        killedAtImpact ||= damage.killed;
+        if (damage.killed) { this.blood.burst(hit.point, direction, head); this.audio.death(); }
         landed = true;
         this.kills = this.encounter.kills;
         this.callbacks.onHit(head, damage.killed, damage.armorBroken);
         if (damage.armorHit) this.audio.armor(damage.armorHit, damage.armorBroken);
         else this.audio.tone(head ? 1100 : 800, 450, 0.07, 0.025);
       }
-      if (hit && !killed) {
+      if (trace.impact && !killedAtImpact && definition.kind !== 'flame' && definition.kind !== 'melee') {
         for (let i = 0; i < 9; i++) {
           const velocity = new THREE.Vector3((Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.3) * 2);
-          this.addEffect(end.clone(), velocity, new THREE.Vector3().setScalar(0.035 + Math.random() * 0.055), targetId === undefined ? 0xb0ac85 : 0xc6ad78, 0.3 + Math.random() * 0.3, 5, true);
+          this.addEffect(trace.end.clone(), velocity, new THREE.Vector3().setScalar(0.035 + Math.random() * 0.055), firstTarget ? 0xc6ad78 : 0xb0ac85, 0.3 + Math.random() * 0.3, 5, true);
         }
       }
     }
     if (landed) this.hitCount++;
     const direction = centerDirection;
-    for (let i = 0; i < 2; i++) this.addEffect(muzzle.clone().addScaledVector(direction, 0.12 + i * 0.13), new THREE.Vector3(0.03, 0.14, -0.07), new THREE.Vector3().setScalar(0.075), 0xc0c3ab, 0.24 + i * 0.09);
+    if (definition.kind === 'gun' || definition.kind === undefined) for (let i = 0; i < 2; i++) this.addEffect(visualMuzzle.clone().addScaledVector(direction, 0.12 + i * 0.13), new THREE.Vector3(0.03, 0.14, -0.07), new THREE.Vector3().setScalar(0.075), 0xc0c3ab, 0.24 + i * 0.09);
     this.publish();
   }
 
@@ -703,6 +772,7 @@ export class Game {
     this.fpsTime += rawDelta;
     if (this.fpsTime >= 1) { this.fps = Math.round(this.frameCount / this.fpsTime); this.fpsTime = 0; this.frameCount = 0; }
     if ((this.phase === 'playing' && this.pointerLocked) || (this.coop && this.phase !== 'failed')) {
+      this.lastAdvanceAt = performance.now();
       const previousGun = this.firearm;
       const previousActive = this.arsenal.active;
       const previousAmmo = this.firearm.ammo;
@@ -715,7 +785,7 @@ export class Game {
       const gun = this.firearm;
       const ejectAt = gun.definition.shellReload || gun.definition.id === 'sniper' ? 0.55 : 0.2;
       // 左轮只在原始换弹动画中退壳；泵动与拉栓武器等机械动作推进后再抛壳。
-      if (wasFiring && previousGun === gun && gun.definition.id !== 'revolver' && previousFire < ejectAt && gun.fireProgress >= ejectAt) {
+      if (wasFiring && previousGun === gun && gun.definition.kind !== 'melee' && gun.definition.kind !== 'flame' && gun.definition.id !== 'revolver' && previousFire < ejectAt && gun.fireProgress >= ejectAt) {
         const shellOrigin = this.weapon.root.localToWorld(new THREE.Vector3(0.04, -0.02, -0.12));
         const velocity = new THREE.Vector3(1.8, 1.2, 0.1).applyQuaternion(this.camera.quaternion);
         this.addEffect(shellOrigin, velocity, new THREE.Vector3(0.03, 0.025, 0.085), gun.definition.shellReload ? 0x984038 : 0xbb9751, 0.85, 5, true, false);
@@ -765,7 +835,7 @@ export class Game {
       if (complete) { this.phase = 'failed'; this.callbacks.onEnd(this.result!); this.publish(); }
     } else if (this.phase !== 'failed') this.updateAim(this.phase === 'playing' ? delta : 0);
     if (this.phase === 'playing' && this.trigger && this.firearm.definition.automatic) this.shoot();
-    this.weapon.flash.visible = this.flashTime > 0 && this.phase === 'playing';
+    this.weapon.flash.visible = this.flashTime > 0 && this.phase === 'playing' && this.firearm.definition.kind !== 'melee';
     this.weapon.flash.rotation.z = this.elapsed * 26;
     this.weapon.light.intensity = this.weapon.flash.visible ? 8 : 0;
     const shadowInterval = { off: Infinity, low: 500, medium: 250, high: 100, ultra: 0 }[this.graphics.shadows];
@@ -786,7 +856,7 @@ export class Game {
     const inventory = observed ? WEAPONS.map((gun, index) => index === observed.weapon ? observed.ammo : gun.capacity) : this.arsenal.guns.map(gun => gun.ammo);
     const shownDefinition = WEAPONS[observed?.weapon ?? this.arsenal.active], shownReloading = observed?.reloading ?? this.firearm.reloading;
     const shownReloadProgress = observed?.reloadProgress ?? this.firearm.animationProgress;
-    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: shownReloading, reloadStage: shownReloading ? reloadStage(shownDefinition, shownReloadProgress) : null, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, sensitivity: this.sensitivity, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, inventory });
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < 0.28, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: shownReloading, reloadStage: shownReloading ? reloadStage(shownDefinition, shownReloadProgress) : null, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, sensitivity: this.sensitivity, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, aiming: !observed && this.aiming, inventory });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {
@@ -814,7 +884,7 @@ export class Game {
       overWater: isWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),
       health: this.encounter.health, player: { ...this.encounter.player }, pointerLocked: this.pointerLocked, lockHint: this.lockHint,
       phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, totalSpawned: this.encounter.totalSpawned, pressure: this.encounter.pressure, nearest: this.encounter.nearest, result: this.result, ammo: this.firearm.ammo, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, reloading: this.firearm.reloading,
-      yaw: this.view.x, pitch: this.view.y, aim: this.aim.toArray(), aimPoint: this.aimPoint.toArray(), muzzle: muzzle.toArray(), barrelDirection: barrelDirection.toArray(),
+      yaw: this.view.x, pitch: this.view.y, aim: this.aim.toArray(), aimPoint: this.aimPoint.toArray(), muzzle: muzzle.toArray(), ballisticMuzzle: this.ballisticMuzzle.toArray(), aiming: this.aiming, aimBlend: this.aimBlend, barrelDirection: barrelDirection.toArray(),
       flashVisible: this.weapon.flash.visible, weaponVisible: this.weapon.root.visible, effects: this.effects.length, lastShot: this.lastShot, drawCalls: this.renderer.info.render.calls, renderCount: this.renderCount, fps: this.fps,
       blood: this.blood.diagnostics(),
       armorEffects: this.armorEffects.diagnostics(), audio: this.audio.diagnostics(), breach: this.breachFeedback(), defenseVisible: false,
@@ -836,11 +906,11 @@ export class Game {
     this.observer.disconnect();
     this.renderer.domElement.removeEventListener('pointermove', this.pointerMove);
     this.renderer.domElement.removeEventListener('pointerdown', this.pointerDown);
-    this.renderer.domElement.removeEventListener('pointerleave', this.releaseTrigger);
-    this.renderer.domElement.removeEventListener('pointercancel', this.releaseTrigger);
+    this.renderer.domElement.removeEventListener('pointerleave', this.cancelPointerInput);
+    this.renderer.domElement.removeEventListener('pointercancel', this.cancelPointerInput);
     this.renderer.domElement.removeEventListener('contextmenu', this.contextMenu);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLost);
-    window.removeEventListener('pointerup', this.releaseTrigger);
+    window.removeEventListener('pointerup', this.pointerUp);
     window.removeEventListener('blur', this.blur);
     window.removeEventListener('focus', this.focus);
     window.removeEventListener('keydown', this.keyDown);

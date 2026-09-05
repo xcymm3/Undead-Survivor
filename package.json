@@ -1,6 +1,6 @@
 {
   "name": "undead-survivor",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "type": "module",
   "main": "desktop/main.cjs",
@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "balance": "node scripts/evaluate-balance.mjs",
+    "balance:weapons": "node scripts/evaluate-balance.mjs --weapons-only",
     "verify": "npm run test && npm run build && npm run test:e2e"
   },
   "dependencies": {
