@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Game } from './game/Game';
 import { WEAPONS } from './game/weapons';
+import { isOpticalSight, weaponSight } from './game/sights';
+import { SightOverlay } from './ui/SightOverlay';
 import { DIFFICULTIES, FIXED_DIFFICULTY } from './game/config';
 import type { GameMode, GameSnapshot } from './game/config';
 import { DEFAULT_GRAPHICS_SETTINGS } from './game/graphics';
@@ -120,6 +122,9 @@ export function App() {
   };
 
   const weapon = WEAPONS[state.weaponIndex];
+  const sight = weaponSight(weapon);
+  const sightActive = state.phase === 'playing' && state.aiming;
+  const scoped = sightActive && isOpticalSight(sight);
   const ammoBars = Math.min(weapon.capacity, 50);
   const leaveCoop = async () => {
     try { await window.steamCoop?.leave(); } catch (cause) { setError(String(cause)); }
@@ -127,10 +132,11 @@ export function App() {
   };
   const pendingWeapon = state.requestedWeapon !== state.weaponIndex;
 
-  return <main className={`game-shell phase-${state.phase}`}>
+  return <main className={`game-shell phase-${state.phase} ${sightActive ? `aiming-${sight.kind}` : ''}`}>
     <div ref={host} className={`viewport ${state.pixelated ? 'pixelated' : ''}`}>
-      {state.phase === 'playing' && <div className={`crosshair ${feedback ? 'is-hit' : ''} ${state.reloading ? 'is-reloading' : ''}`} aria-hidden="true"><i /><i /><i /><i /><b />{feedback && <span className="hit-mark" key={feedback.key}>×</span>}</div>}
+      {state.phase === 'playing' && <div className={`crosshair ${sightActive && sight.kind !== 'hold' ? 'sight-aligned' : ''} ${feedback ? 'is-hit' : ''} ${state.reloading ? 'is-reloading' : ''}`} aria-hidden="true"><i /><i /><i /><i /><b />{feedback && <span className="hit-mark" key={feedback.key}>×</span>}</div>}
     </div>
+    {scoped && <SightOverlay sight={sight} />}
     <div className="vignette" aria-hidden="true" /><div className={`damage-vignette ${state.hurt ? 'active' : ''}`} aria-hidden="true" />
 
     {multiplayer && <MultiplayerPanel notice={error} close={() => setMultiplayer(false)} />}
@@ -152,7 +158,7 @@ export function App() {
         <h1 id="game-title">UNDEAD<br /><span>SURVIVOR</span><b>.</b></h1>
         <p className="intro-line">在封锁区移动，活到最后。</p>
         <p className="intro-description">森林边缘有了动静。<br />跨过河流，守住一波又一波尸群。</p>
-        <div className="intro-controls"><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> 开火</span><span><kbd>右键</kbd> 抬枪</span><span><kbd>R</kbd> 换弹</span><span><kbd>1–0 / 滚轮</kbd> 切枪</span></div>
+        <div className="intro-controls"><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> 开火</span><span><kbd>右键</kbd> 瞄准 / 开镜</span><span><kbd>R</kbd> 换弹</span><span><kbd>1–0 / 滚轮</kbd> 切枪</span></div>
       </div>
       <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
       {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在准备十款武器…</div>}
@@ -166,10 +172,10 @@ export function App() {
       <div className={`health-panel ${state.health <= 30 ? 'critical' : ''}`} aria-label="玩家生命值"><span className="label">生命值 / HEALTH</span><div><strong data-testid="player-health">{state.health}</strong><span>/ 100</span></div><progress value={state.health} max={100} aria-label="剩余生命值" /><small>{state.mode === 'practice' ? '练习模式 · 不受伤害' : state.health <= 30 ? '生命垂危 · 保持距离' : '每次受伤 10 点 · 0.3 秒保护'}</small></div>
       {state.phase === 'playing' && !state.pointerLocked && <div className="pointer-hint">点击场景捕获鼠标 · WASD 移动 · ESC 暂停</div>}
       {feedback && state.phase === 'playing' && <div className={`hit-feedback ${feedback.head ? 'headshot' : ''}`} key={feedback.key}>{feedback.armorBroken ? '护甲击落' : feedback.head ? '精准命中' : feedback.killed ? '目标击倒' : '命中目标'}<small>{feedback.armorBroken ? 'ARMOR OFF · 继续射击' : feedback.head ? 'HEADSHOT' : feedback.killed ? 'TARGET DOWN' : 'TARGET HIT'}</small></div>}
-      <div className={`ammo-panel ${state.ammo === 0 ? 'empty' : ''}`}><div className="weapon-label"><RifleIcon /><span data-testid="weapon-name">{weapon.label}<small>{weapon.short} · {weapon.kind === 'melee' ? '近距离挥砍' : weapon.kind === 'flame' ? '火焰穿透' : weapon.automatic ? '按住连发' : '单次射击'}</small></span></div><div className="ammo-count"><strong data-testid="ammo">{weapon.infiniteAmmo ? '∞' : String(state.ammo).padStart(2, '0')}</strong>{!weapon.infiniteAmmo && <span>/ {weapon.capacity}<small>哨站备弹 ∞</small></span>}</div>{!weapon.infiniteAmmo && <div className="ammo-bars" aria-hidden="true">{Array.from({ length: ammoBars }, (_, i) => <i key={i} className={i < state.ammo / weapon.capacity * ammoBars ? 'loaded' : ''} />)}</div>}<span className="reload-hint">{state.coop?.spectating ? state.reloading ? '队友正在装填…' : '第一人称观战队友' : state.switching ? '切换中…' : pendingWeapon ? `动作结束后切换 · ${WEAPONS[state.requestedWeapon].label}` : state.reloadQueued ? '准备装填…' : state.reloading ? weapon.shellReload ? '逐发装填中…' : '正在更换弹匣…' : state.ammo === 0 ? '弹匣已空 · 按 R 换弹' : state.aiming ? '机械瞄具已对齐' : <><kbd>右键</kbd> 抬枪瞄准</>}</span></div>
+      <div className={`ammo-panel ${state.ammo === 0 ? 'empty' : ''}`}><div className="weapon-label"><RifleIcon /><span data-testid="weapon-name">{weapon.label}<small>{weapon.short} · {weapon.kind === 'melee' ? '近距离挥砍' : weapon.kind === 'flame' ? '火焰穿透' : weapon.automatic ? '按住连发' : '单次射击'}</small></span></div><div className="ammo-count"><strong data-testid="ammo">{weapon.infiniteAmmo ? '∞' : String(state.ammo).padStart(2, '0')}</strong>{!weapon.infiniteAmmo && <span>/ {weapon.capacity}<small>哨站备弹 ∞</small></span>}</div>{!weapon.infiniteAmmo && <div className="ammo-bars" aria-hidden="true">{Array.from({ length: ammoBars }, (_, i) => <i key={i} className={i < state.ammo / weapon.capacity * ammoBars ? 'loaded' : ''} />)}</div>}<span className="reload-hint">{state.coop?.spectating ? state.reloading ? '队友正在装填…' : '第一人称观战队友' : state.switching ? '切换中…' : pendingWeapon ? `动作结束后切换 · ${WEAPONS[state.requestedWeapon].label}` : state.reloadQueued ? '准备装填…' : state.reloading ? weapon.shellReload ? '逐发装填中…' : '正在更换弹匣…' : state.ammo === 0 ? '弹匣已空 · 按 R 换弹' : state.aiming ? `${sight.label} · ${sight.magnification}×` : <><kbd>右键</kbd> {sight.label}</>}</span></div>
       <div className="weapon-slots" role="group" aria-label="切换武器">{WEAPONS.map((gun, index) => { const key = index === 9 ? 0 : index + 1; return <button key={gun.id} disabled={state.phase !== 'playing' || state.coop?.spectating} aria-label={`切换到${gun.label}`} aria-pressed={index === state.weaponIndex} data-pending={pendingWeapon && index === state.requestedWeapon} onClick={() => game.current?.switchWeapon(index)} title={`${key} · ${gun.label}`}><kbd>{key}</kbd><span>{gun.short}</span><small>{gun.infiniteAmmo ? '∞' : state.inventory[index]}</small></button>; })}<p>{state.coop?.spectating ? '正在同步队友武器状态' : '数字键 1–0 / 滚轮切换'}</p></div>
       {state.reloading && <div className="reload-progress" role="status"><span>{{ prepare: '准备武器', eject: weapon.id === 'revolver' ? '打开弹巢并退壳' : '卸下弹匣', insert: weapon.shellReload ? '装入弹壳' : weapon.id === 'revolver' ? '快速装弹' : '插入弹匣', action: weapon.id === 'sniper' ? '拉动枪栓' : weapon.id === 'pistol' ? '释放套筒' : '枪机操作', return: '回正武器' }[state.reloadStage ?? 'prepare']}</span><i /></div>}
-      <footer className="play-footer"><div><span className="signal-dot" /><span>{state.fps} FPS</span><span className="footer-divider" /><span>自由视角 · 44 × 62 m</span></div><div><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> {weapon.kind === 'melee' ? '挥砍' : weapon.automatic ? '按住连发' : '单次射击'}</span><span><kbd>右键</kbd> 抬枪瞄准</span><span><kbd>ESC</kbd> 暂停</span></div></footer>
+      <footer className="play-footer"><div><span className="signal-dot" /><span>{state.fps} FPS</span><span className="footer-divider" /><span>自由视角 · 44 × 62 m</span></div><div><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> {weapon.kind === 'melee' ? '挥砍' : weapon.automatic ? '按住连发' : '单次射击'}</span><span><kbd>右键</kbd> {sight.label}</span><span><kbd>ESC</kbd> 暂停</span></div></footer>
     </div>}
 
     {state.phase === 'paused' && !settings && !state.coop && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><span className="label">WATCH ON HOLD</span><h2>哨站已暂停</h2><p>准备好后，继续移动与战斗。{state.mode === 'survival' && '坚守计时已暂停。'}</p><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button><small>按 ESC 继续</small></div></section>}

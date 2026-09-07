@@ -13,6 +13,7 @@ import { scheduleFrame } from './frameTiming';
 import { GameAudio } from './audio';
 import { Arsenal } from './arsenal';
 import { WEAPONS } from './weapons';
+import { isOpticalSight, sightFov, weaponSight } from './sights';
 import type { WeaponDefinition } from './weapons';
 import { cube, material } from './geometry';
 import { WeaponView } from './weapon';
@@ -218,13 +219,15 @@ export class Game {
   private keyUp = (event: KeyboardEvent) => { this.keys.delete(event.code); };
   private clearInput() {
     this.keys.clear(); this.playerMotion.clearInput(); this.trigger = false; this.aiming = false; this.aimBlend = 0;
+    this.camera.fov = CONFIG.camera.fov; this.camera.updateProjectionMatrix(); this.weapon.setSightView(false);
     this.coop?.sendInput(this.keys, this.view.x, this.view.y, this.jumpSequence, 1);
     if (this.pointerLocked) document.exitPointerLock();
   }
   private pointerMove = (event: PointerEvent) => {
     if (this.phase !== 'playing' || !this.pointerLocked) return;
-    const sensitivity = lookSensitivityRadians(this.sensitivity);
-    const movement = filterPointerMovement(event.movementX, event.movementY, this.width, this.height, sensitivity);
+    const baseSensitivity = lookSensitivityRadians(this.sensitivity);
+    const sensitivity = baseSensitivity * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(CONFIG.camera.fov / 2));
+    const movement = filterPointerMovement(event.movementX, event.movementY, this.width, this.height, baseSensitivity);
     const next = turnView(this.view.x, this.view.y, movement.dx, movement.dy, sensitivity);
     this.view.set(next.yaw, next.pitch);
   };
@@ -249,7 +252,7 @@ export class Game {
     if (event.button === 0) this.releaseTrigger();
     if (event.button === 2) { this.aiming = false; this.dirty = true; this.publish(); }
   };
-  private cancelPointerInput = () => { this.trigger = false; this.aiming = false; };
+  private cancelPointerInput = () => { this.trigger = false; this.aiming = false; this.dirty = true; this.publish(); };
   private contextMenu = (event: Event) => event.preventDefault();
   private contextLost = (event: Event) => {
     event.preventDefault();
@@ -428,6 +431,7 @@ export class Game {
   reload() {
     if (this.coop?.local.health === 0) return;
     if (this.phase === 'playing' && this.arsenal.reload()) {
+      this.aiming = false;
       this.coop?.command({ type: 'reload', index: this.arsenal.active });
       if (this.firearm.reloading) this.audio.mechanical('release');
       this.publish();
@@ -517,8 +521,22 @@ export class Game {
     this.updateAim(0); this.publish();
   }
 
+  private get wantsAim() {
+    return this.aiming && this.phase === 'playing' && this.pointerLocked && this.encounter.health > 0
+      && (!this.coop || this.coop.local.health > 0) && !this.firearm.reloading && !this.arsenal.blocked;
+  }
+  private get sightActive() { return this.wantsAim && this.aimBlend >= .65; }
+
   private updateAim(delta: number) {
     const spectated = this.spectatedPlayer();
+    const wasSightActive = this.sightActive;
+    const wantsAim = this.wantsAim && !spectated;
+    this.aimBlend = delta > 0 ? THREE.MathUtils.damp(this.aimBlend, wantsAim ? 1 : 0, 16, delta) : wantsAim ? this.aimBlend : 0;
+    if (Math.abs(this.aimBlend - Number(wantsAim)) < .001) this.aimBlend = Number(wantsAim);
+    const sight = weaponSight(this.firearm.definition);
+    const magnification = THREE.MathUtils.lerp(1, sight.magnification, this.aimBlend);
+    const fov = sightFov(CONFIG.camera.fov, magnification);
+    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     this.camera.position.set(spectated?.x ?? this.encounter.player.x, CONFIG.camera.height + (spectated?.height ?? this.playerMotion.height), spectated?.z ?? this.encounter.player.z);
     this.camera.rotation.set(spectated?.pitch ?? this.view.y, spectated?.yaw ?? this.view.x, 0, 'YXZ');
     this.camera.updateMatrixWorld(true);
@@ -562,10 +580,8 @@ export class Game {
     this.weapon.root.quaternion.copy(weaponQuaternion(this.weapon.root.position, visualWeaponTarget(localTarget)));
     this.weapon.root.rotateX(pose.rx); this.weapon.root.rotateY(pose.ry); this.weapon.root.rotateZ(pose.rz - drop * .20);
     this.weapon.root.updateMatrixWorld(true);
-    // 弹道始终取腰射姿态下的枪口。右键只移动第一人称模型，不改变命中、散布或伤害。
+    // 弹道保留腰射枪口遮挡检测；开镜只改变投影，目标仍取同一屏幕中心射线。
     this.weapon.muzzle.getWorldPosition(this.ballisticMuzzle);
-    const wantsAim = this.aiming && !spectated && !gun.reloading && !this.arsenal.switching;
-    this.aimBlend = delta > 0 ? THREE.MathUtils.damp(this.aimBlend, wantsAim ? 1 : 0, 12, delta) : this.aimBlend;
     if (this.aimBlend > 0.0001) {
       const adsPosition = new THREE.Vector3(...definition.ads);
       this.weapon.root.position.lerpVectors(hipPosition, adsPosition, this.aimBlend);
@@ -577,6 +593,8 @@ export class Game {
       if (definition.kind === 'melee') this.weapon.root.rotateZ(-.22 * this.aimBlend);
       this.weapon.root.updateMatrixWorld(true);
     }
+    this.weapon.setSightView(this.sightActive && isOpticalSight(sight));
+    if (wasSightActive !== this.sightActive) this.publish();
   }
 
   private addEffect(position: THREE.Vector3, velocity: THREE.Vector3, scale: THREE.Vector3, color: number, life: number, gravity = 0, spin = false, shrink = true, emissive = false) {
@@ -835,7 +853,8 @@ export class Game {
       if (complete) { this.phase = 'failed'; this.callbacks.onEnd(this.result!); this.publish(); }
     } else if (this.phase !== 'failed') this.updateAim(this.phase === 'playing' ? delta : 0);
     if (this.phase === 'playing' && this.trigger && this.firearm.definition.automatic) this.shoot();
-    this.weapon.flash.visible = this.flashTime > 0 && this.phase === 'playing' && this.firearm.definition.kind !== 'melee';
+    this.weapon.flash.visible = this.flashTime > 0 && this.phase === 'playing' && this.firearm.definition.kind !== 'melee'
+      && !(this.sightActive && isOpticalSight(weaponSight(this.firearm.definition)));
     this.weapon.flash.rotation.z = this.elapsed * 26;
     this.weapon.light.intensity = this.weapon.flash.visible ? 8 : 0;
     const shadowInterval = { off: Infinity, low: 500, medium: 250, high: 100, ultra: 0 }[this.graphics.shadows];
@@ -856,7 +875,7 @@ export class Game {
     const inventory = observed ? WEAPONS.map((gun, index) => index === observed.weapon ? observed.ammo : gun.capacity) : this.arsenal.guns.map(gun => gun.ammo);
     const shownDefinition = WEAPONS[observed?.weapon ?? this.arsenal.active], shownReloading = observed?.reloading ?? this.firearm.reloading;
     const shownReloadProgress = observed?.reloadProgress ?? this.firearm.animationProgress;
-    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < ATTACK.damageProtection, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: shownReloading, reloadStage: shownReloading ? reloadStage(shownDefinition, shownReloadProgress) : null, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, sensitivity: this.sensitivity, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, aiming: !observed && this.aiming, inventory });
+    this.callbacks.onState({ coop, wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission, grounded: this.playerMotion.grounded, playerHeight: this.playerMotion.height, health: this.encounter.health, hurt: this.encounter.elapsed - this.encounter.lastDamageAt < ATTACK.damageProtection, pointerLocked: this.pointerLocked, phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, alive: this.encounter.alive, zombieCounts: this.encounter.zombieCounts, nearest: this.encounter.nearest, spawnRate: this.encounter.pressure.spawnRate, speed: this.encounter.pressure.speed, result: this.result, ammo: observed?.ammo ?? this.firearm.ammo, reloading: shownReloading, reloadStage: shownReloading ? reloadStage(shownDefinition, shownReloadProgress) : null, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, fps: this.fps, yaw: THREE.MathUtils.radToDeg(this.view.x), pitch: THREE.MathUtils.radToDeg(this.view.y), sound: this.audio.enabled, volume: this.audio.volume, sensitivity: this.sensitivity, breach: this.breachFeedback(), pixelated: this.graphics.pixelated, graphicsPreset: matchingGraphicsPreset(this.graphics), graphics: { ...this.graphics }, renderResolution: { width: this.renderWidth, height: this.renderHeight, scale: this.renderer.getPixelRatio(), gpu: this.gpu }, weaponsReady: this.weapon.loaded, weaponIndex: observed?.weapon ?? this.arsenal.active, requestedWeapon: observed?.weapon ?? this.arsenal.requested, switching: observed ? false : this.arsenal.switching, reloadQueued: observed ? false : this.arsenal.reloadQueued, aiming: !observed && this.sightActive, inventory });
   }
 
   private breachFeedback(): GameSnapshot['breach'] {

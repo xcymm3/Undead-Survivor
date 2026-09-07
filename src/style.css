@@ -102,6 +102,44 @@ h1 b { color: var(--color-accent); font-weight: inherit; }
 .crosshair b { position: absolute; left: 13px; top: 13px; width: 2px; height: 2px; background: currentColor; }
 .crosshair.is-hit { color: var(--color-accent); }
 .crosshair.is-reloading { opacity: 0.35; }
+.crosshair.sight-aligned > i, .crosshair.sight-aligned > b { visibility: hidden; }
+.crosshair.sight-aligned { z-index: 5; }
+/* 镜内始终透出真实游戏画面；分划中心与相机中心严格重合。 */
+.sight-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; --sight-size: min(60vmin, 520px); }
+.sight-lens { position: absolute; left: 50%; top: 50%; width: var(--sight-size); height: var(--sight-size); transform: translate(-50%, -50%); border: 15px solid #222a2c; border-radius: 50%; box-shadow: 0 0 0 3px #58605d, 0 0 0 9px #111819, 0 10px 0 12px #111819, inset 0 0 26px 10px #17282b70; background: radial-gradient(circle, transparent 42%, #668f8830 100%); }
+.sight-lens::after { content: ''; position: absolute; top: calc(100% + 15px); left: 32%; width: 36%; height: 65px; background: linear-gradient(90deg, #111819, #354044 45%, #111819); border: 3px solid #101617; border-top: 0; }
+.sight-reticle { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; }
+.sight-reticle path, .sight-reticle circle { vector-effect: non-scaling-stroke; }
+.illuminated-reticle { stroke: #ff4936; stroke-width: 1.5; filter: drop-shadow(0 0 3px #f32713); }
+.sight-dot { fill: #ff4936; stroke: none; }
+.sight-caption { position: absolute; bottom: 9%; left: 0; right: 0; text-align: center; font-size: 10px; letter-spacing: 2px; color: #ced8ce; text-shadow: 0 1px 3px #000; }
+.sight-holographic { --sight-size: min(57vmin, 480px); }
+.sight-holographic .sight-lens { border-radius: 22% 22% 12% 12%; border-width: 19px; box-shadow: 0 0 0 3px #5b6664, 0 0 0 10px #161e20, inset 0 0 25px #496d6370; }
+.sight-reflex { --sight-size: min(53vmin, 440px); }
+.sight-reflex .sight-lens { border-radius: 38% 38% 13% 13%; border-width: 9px; }
+.sight-reflex .illuminated-reticle { stroke: #87ee99; filter: drop-shadow(0 0 3px #5ada75); }
+.sight-reflex .sight-dot { fill: #87ee99; }
+.sight-prism { --sight-size: min(66vmin, 560px); }
+.sight-prism .sight-lens { border-width: 24px; box-shadow: 0 0 0 3px #59615d, 0 0 0 14px #111819, inset 0 0 36px 12px #0610109c; }
+.prism-etching { stroke: #e99c50; stroke-width: 1.5; filter: drop-shadow(0 1px 1px #000); }
+.prism-etching text { fill: #e99c50; stroke: none; font: 10px monospace; }
+.sight-sniper { --sight-size: 94vmin; }
+.sight-sniper .sight-lens { border: 9px solid #151b1c; box-shadow: 0 0 0 100vmax #020404, inset 0 0 28px 12px #020404ac; background: none; }
+.sight-sniper .sight-lens::after { display: none; }
+.scope-etching { stroke: #080d0b; stroke-width: 1; }
+.scope-etching circle { fill: #080d0b; }
+.scope-etching .scope-center { fill: #d74835; stroke: none; }
+.scope-etching .scope-post { stroke-width: 5; }
+.scope-instruction { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #9da8a2; font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
+.aiming-sniper .brand, .aiming-sniper .compass, .aiming-sniper .objective, .aiming-sniper .horde-status,
+.aiming-sniper .terrain-hint, .aiming-sniper .proximity, .aiming-sniper .survival-clock,
+.aiming-sniper .weapon-slots, .aiming-sniper .play-footer { visibility: hidden; }
+.aiming-sniper .hud { z-index: 3; }
+.aiming-sniper .ammo-panel { right: 24px; bottom: 40px; min-width: 0; }
+.aiming-sniper .ammo-panel .weapon-label, .aiming-sniper .ammo-bars, .aiming-sniper .reload-hint { display: none; }
+.aiming-sniper .ammo-count strong { font-size: 40px; }
+.aiming-sniper .health-panel { left: 24px; bottom: 40px; }
+.aiming-sniper .health-panel small { display: none; }
 .hit-mark { position: absolute; font: 30px/28px var(--font-body); inset: 0; text-align: center; animation: hit-pulse 180ms var(--ease-out) both; }
 @keyframes hit-pulse { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .hit-feedback { position: absolute; top: 61%; left: 50%; transform: translateX(-50%); font-size: 12px; letter-spacing: 3px; color: var(--color-ink); text-align: center; }

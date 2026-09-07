@@ -258,6 +258,9 @@ export class WeaponView {
     this.flash.visible = false; this.light.intensity = 0;
   }
   animate(kind: WeaponAnimation, progress: number) { this.rigs[this.active]?.sample(kind, progress); }
+  setSightView(scoped: boolean) {
+    this.rigs.forEach((rig, index) => { rig.holder.visible = index === this.active && !scoped; });
+  }
   diagnostics() { return { loaded: this.loaded, model: WEAPONS[this.active].model, attachedModels: this.rigs.filter(rig => rig.holder.parent === this.root).length, visibleModels: this.rigs.filter(rig => rig.holder.visible).length, ...this.rigs[this.active]?.diagnostics() }; }
   dispose() { this.disposed = true; this.rigs.forEach(rig => rig.dispose()); }
 }
