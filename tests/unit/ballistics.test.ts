@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { resolveWeaponHits } from '../../src/game/ballistics';
+import { pelletOffset, resolveWeaponHits } from '../../src/game/ballistics';
+import { WEAPONS } from '../../src/game/weapons';
 
 describe('武器射线命中顺序', () => {
+  it('重机枪连续射击有可复现的散布，精准步枪仍沿准星发射', () => {
+    const hmg = WEAPONS.find(weapon => weapon.id === 'heavy-machine-gun')!;
+    const offsets = Array.from({ length: 8 }, (_, shot) => pelletOffset(hmg, 0, shot));
+    expect(new Set(offsets.map(offset => `${offset.x},${offset.y}`)).size).toBe(8);
+    offsets.forEach((offset, shot) => {
+      expect(offset).toEqual(pelletOffset(hmg, 0, shot));
+      expect(Math.hypot(offset.x, offset.y)).toBeGreaterThan(0);
+      expect(Math.hypot(offset.x, offset.y)).toBeLessThanOrEqual(hmg.spread);
+      expect(pelletOffset(WEAPONS[0], 0, shot)).toEqual({ x: 0, y: 0 });
+    });
+  });
+
   const zombie = (distance: number, id: number) => ({ distance, kind: 'zombie', id });
   const wall = (distance: number) => ({ distance, kind: 'wall', id: -1 });
   const isZombie = (hit: ReturnType<typeof zombie>) => hit.kind === 'zombie';

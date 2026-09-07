@@ -9,7 +9,7 @@ describe('独立弹匣与协调切枪', () => {
     expect(a.active).toBe(0); expect(a.fire()).toBe(false);
     a.update(0.19); expect(a.active).toBe(0);
     a.update(0.02); expect(a.active).toBe(1); expect(a.fire()).toBe(false);
-    a.update(0.2); expect(a.fire()).toBe(true); expect(a.gun.ammo).toBe(49);
+    a.update(0.2); expect(a.fire()).toBe(true); expect(a.gun.ammo).toBe(WEAPONS[1].capacity - 1);
     a.update(0.2); a.request(0); a.update(0.4);
     expect(a.gun.ammo).toBe(29); expect(a.shots).toBe(2);
   });

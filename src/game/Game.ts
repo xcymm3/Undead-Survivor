@@ -645,7 +645,7 @@ export class Game {
     let landed = false, head = false, killed = false, armorBroken = false;
     const damaged = new Set<number>();
     for (let i = 0; i < gun.pellets; i++) {
-      const offset = pelletOffset(gun, i);
+      const offset = pelletOffset(gun, i, arsenal.gun.shots);
       const direction = center.clone().addScaledVector(right, offset.x).addScaledVector(up, offset.y).normalize();
       const trace = this.traceWeapon(muzzle, direction, gun);
       for (const hit of trace.targets) {
@@ -730,7 +730,7 @@ export class Game {
     let landed = false;
     const damaged = new Set<number>();
     for (let pellet = 0; pellet < definition.pellets; pellet++) {
-      const offset = pelletOffset(definition, pellet);
+      const offset = pelletOffset(definition, pellet, this.firearm.shots);
       const direction = centerDirection.clone().addScaledVector(right, offset.x).addScaledVector(up, offset.y).normalize();
       // 从腰射枪口重新检测遮挡；右键举枪不会改变此处的弹道起点。
       const trace = this.traceWeapon(muzzle, direction, definition);

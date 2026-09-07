@@ -1,7 +1,13 @@
 import type { WeaponDefinition } from './weapons';
 
 /** 单机和房主共用确定性弹幕，避免客户端表现与权威命中使用不同的随机散布。 */
-export function pelletOffset(weapon: WeaponDefinition, pellet: number) {
+export function pelletOffset(weapon: WeaponDefinition, pellet: number, shot = 0) {
+  // 单弹丸武器也应用散布；按该武器的射击次数取样，联机两端可复现。
+  if (weapon.pellets === 1 && weapon.spread > 0) {
+    const angle = (shot + 1) * 2.399963229728653;
+    const radius = weapon.spread * Math.sqrt(((shot + 1) * .7548776662466927) % 1);
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  }
   if (pellet === 0) return { x: 0, y: 0 };
   if (weapon.spreadVertical !== undefined) {
     // 首颗保留准星中心，其余按左右对称的横向列、上下两层填满扇面。
