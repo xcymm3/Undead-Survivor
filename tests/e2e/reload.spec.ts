@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { capture, fire } from './controls';
 import { WEAPONS } from '../../src/game/weapons';
+import { CONFIG } from '../../src/game/config';
+import { isOpticalSight, sightFov, weaponSight } from '../../src/game/sights';
 const snapshot = (page: Page) => page.evaluate(() => window.__undeadTower!.snapshot());
 async function freezeAt(page: Page, progress: number, initiate = false) {
   await page.evaluate(async ({ threshold, initiate }) => {
@@ -35,12 +37,22 @@ test('十种武器数字键切换、右键抬枪、独立弹量、换弹动画�
     await expect.poll(async () => (await snapshot(page)).aimBlend).toBeGreaterThan(.8);
     const aimed = await snapshot(page);
     expect(aimed.aiming).toBe(true);
+    const sight = weaponSight(WEAPONS[i]);
+    expect(aimed.cameraFov).toBeCloseTo(sightFov(CONFIG.camera.fov, 1 + (sight.magnification - 1) * aimed.aimBlend), 5);
+    expect(aimed.weaponAnimation.visibleModels).toBe(isOpticalSight(sight) ? 0 : 1);
+    if (isOpticalSight(sight)) {
+      await expect(page.locator(`.sight-${sight.kind}`)).toBeVisible();
+      const lens = (await page.locator('.sight-lens').boundingBox())!;
+      expect(lens.x + lens.width / 2).toBeCloseTo(720, 0);
+      expect(lens.y + lens.height / 2).toBeCloseTo(450, 0);
+    } else await expect(page.locator('.sight-overlay')).toHaveCount(0);
     expect(Math.hypot(...aimed.muzzle.map((v, index) => v - idle.muzzle[index]))).toBeGreaterThan(.015);
     aimed.ballisticMuzzle.forEach((value, index) => expect(value).toBeCloseTo(idle.ballisticMuzzle[index], 5));
     const fired = await fire(page);
     expect(fired.lastShot).not.toBeNull();
     fired.lastShot!.muzzle.forEach((value, index) => expect(value).toBeCloseTo(aimed.ballisticMuzzle[index], 5));
     await page.mouse.up({ button: 'right' });
+    await expect(page.locator('.sight-overlay')).toHaveCount(0);
     expect(fired.ammo).toBe(WEAPONS[i].infiniteAmmo ? WEAPONS[i].capacity : WEAPONS[i].capacity - 1);
     if (WEAPONS[i].infiniteAmmo) {
       await page.keyboard.press('r');

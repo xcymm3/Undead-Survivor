@@ -35,7 +35,7 @@ describe('练习与正式模式', () => {
     e.update(60, farSpawn); expect(e.waveSpawned).toBe(9); expect(e.totalSpawned).toBe(9);
     expect(e.wave).toBe(1); expect(e.wavesCleared).toBe(0);
   });
-  it('清完全部配额才记一波，休整五秒后进入下一波，暂停不推进', () => {
+  it('清完全部配额才记一波，休整结束后进入下一波，暂停不推进', () => {
     const e = new Encounter(); e.reset('survival', 'hard');
     e.update(4, farSpawn);
     for (const z of e.zombies) e.hit(z.id, true, 1000);
@@ -45,10 +45,10 @@ describe('练习与正式模式', () => {
     e.update(0.05, farSpawn);
     expect(e.waveSpawned).toBe(9); expect(e.wavesCleared).toBe(1); expect(e.intermission).toBe(WAVES.rest);
     e.update(0, farSpawn); expect(e.intermission).toBe(WAVES.rest);
-    e.update(4.95, farSpawn); expect(e.wave).toBe(1);
+    e.update(WAVES.rest - .05, farSpawn); expect(e.wave).toBe(1);
     e.update(0.05, farSpawn); expect(e.wave).toBe(2); expect(e.waveSpawned).toBe(0);
     e.update(20, farSpawn); expect(e.waveSpawned).toBe(15); expect(e.totalSpawned).toBe(24);
-    expect(e.pressure.speed).toBeCloseTo(1.55);
+    expect(e.pressure.speed).toBeCloseTo(WAVES.firstSpeed + WAVES.speedGrowth);
   });
   it('入口暂不可用不丢配额，恢复后不会突发补刷', () => {
     const e = new Encounter(); e.reset('survival', 'hard');

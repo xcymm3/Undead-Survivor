@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { capture, fire, lookAt, snapshot } from './controls';
+import { WEAPONS } from '../../src/game/weapons';
 
-test('自由瞄准下护甲仍按原伤害脱落并产生反馈', async ({ page }) => {
+test('自由瞄准下护甲按当前武器伤害脱落并产生反馈', async ({ page }) => {
   test.setTimeout(60000);
   await page.goto('/');
   await page.getByRole('button', { name: '正式模式' }).click();
@@ -25,8 +26,9 @@ test('自由瞄准下护甲仍按原伤害脱落并产生反馈', async ({ page 
     const after = await fire(page), hitId = after.lastShot?.hitTarget;
     const hitBefore = before.targets.find(z => z.id === hitId);
     const current = after.targets.find(z => z.id === hitId);
-    if (hitBefore?.kind === 'cone' && current?.health === 100) {
+    if (hitBefore?.kind === 'cone' && current?.armorHealth === 0) {
       expect(current.kind).toBe('normal'); expect(current.armorHealth).toBe(0);
+      expect(current.health).toBe(Math.max(0, hitBefore.health - WEAPONS[0].damage * (WEAPONS[0].headshotMultiplier ?? 2)));
       expect(after.armorEffects.released).toBe(releasedBefore + 1);
       broken = true;
     }

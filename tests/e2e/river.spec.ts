@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { capture, fire, lookAt, snapshot, start } from './controls';
 import { LEADERBOARD_KEY } from '../../src/game/leaderboard';
+import { WAVES } from '../../src/game/config';
 
 test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async ({ page }) => {
   test.setTimeout(90000);
@@ -86,10 +87,20 @@ test('完整清波后休整、升波增加配额与移速，落水按守住波�
       const target = s.targets.filter(z => z.health > 0 && (blocked.get(z.id) ?? 0) < performance.now())
         .sort((a, b) => Math.hypot(a.x - s.player.x, a.z - s.player.z) - Math.hypot(b.x - s.player.x, b.z - s.player.z))[0];
       if (target && !s.reloading && s.ammo > 0) {
-        const dx = target.x - s.player.x, dz = target.z - s.player.z;
         const height = target.kind === 'bucket' ? 2.21 : target.kind === 'cone' ? 2.4 : 1.83;
-        const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(height - s.cameraPosition[1], Math.hypot(dx, dz));
-        canvas.dispatchEvent(new PointerEvent('pointermove', { movementX: (s.yaw - yaw) / 0.0022, movementY: (s.pitch - pitch) / 0.0022 }));
+        // 与 lookAt 一样分段转向并保留整数残差，等相机更新后再射击。
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const view = window.__undeadTower!.snapshot();
+          const dx = target.x - view.cameraPosition[0], dz = target.z - view.cameraPosition[2];
+          const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(height - view.cameraPosition[1], Math.hypot(dx, dz));
+          const movementX = (view.yaw - yaw) / .0022, movementY = (view.pitch - pitch) / .0022;
+          const turns = Math.max(1, Math.ceil(Math.max(Math.abs(movementX), Math.abs(movementY)) / 100));
+          for (let turn = 0; turn < turns; turn++) canvas.dispatchEvent(new PointerEvent('pointermove', {
+            movementX: Math.round(movementX * (turn + 1) / turns) - Math.round(movementX * turn / turns),
+            movementY: Math.round(movementY * (turn + 1) / turns) - Math.round(movementY * turn / turns),
+          }));
+        }
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0 }));
         window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
         const after = window.__undeadTower!.snapshot();
@@ -106,7 +117,7 @@ test('完整清波后休整、升波增加配额与移速，落水按守住波�
   expect((await snapshot(page)).intermission).toBe(paused.intermission);
   await page.getByRole('button', { name: '继续游戏' }).click(); await capture(page);
   await expect.poll(async () => (await snapshot(page)).wave, { timeout: 8000 }).toBe(2);
-  const next = await snapshot(page); expect(next.waveTotal).toBe(15); expect(next.pressure.speed).toBeCloseTo(1.55);
+  const next = await snapshot(page); expect(next.waveTotal).toBe(15); expect(next.pressure.speed).toBeCloseTo(WAVES.firstSpeed + WAVES.speedGrowth);
   await lookAt(page, 0, 1.7, -40); await page.keyboard.down('w');
   await expect(page.getByRole('heading', { name: '落水失败' })).toBeVisible({ timeout: 15000 });
   await page.keyboard.up('w');
