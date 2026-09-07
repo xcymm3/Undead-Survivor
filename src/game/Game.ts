@@ -33,7 +33,7 @@ import type { Match, Pawn } from '../multiplayer/types';
 import { DEFAULT_LOOK_SENSITIVITY, loadLookSensitivity, LOOK_SENSITIVITY_STORAGE_KEY, lookSensitivityRadians, normalizeLookSensitivity } from './controls';
 import type { PlayerAppearance } from '../multiplayer/appearance';
 import { crossedReloadStage, reloadPose, reloadStage } from './reloadAnimation';
-import { resolveWeaponHits } from './ballistics';
+import { pelletOffset, resolveWeaponHits } from './ballistics';
 
 interface Effect { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; gravity: number; spin: boolean; shrink: boolean; }
 interface GameCallbacks { onState: (state: GameSnapshot) => void; onHit: (head: boolean, killed: boolean, armorBroken: boolean) => void; onError: (message: string) => void; onEnd: (result: RunResult) => void; }
@@ -645,8 +645,8 @@ export class Game {
     let landed = false, head = false, killed = false, armorBroken = false;
     const damaged = new Set<number>();
     for (let i = 0; i < gun.pellets; i++) {
-      const angle = i * 2.399963229728653, radius = gun.spread * Math.sqrt(i / Math.max(1, gun.pellets - 1));
-      const direction = center.clone().addScaledVector(right, Math.cos(angle) * radius).addScaledVector(up, Math.sin(angle) * radius).normalize();
+      const offset = pelletOffset(gun, i);
+      const direction = center.clone().addScaledVector(right, offset.x).addScaledVector(up, offset.y).normalize();
       const trace = this.traceWeapon(muzzle, direction, gun);
       for (const hit of trace.targets) {
         const target = this.zombieField.decode(hit)!;
@@ -730,9 +730,8 @@ export class Game {
     let landed = false;
     const damaged = new Set<number>();
     for (let pellet = 0; pellet < definition.pellets; pellet++) {
-      const angle = pellet * 2.399963229728653;
-      const radius = definition.spread * Math.sqrt(pellet / Math.max(1, definition.pellets - 1));
-      const direction = centerDirection.clone().addScaledVector(right, Math.cos(angle) * radius).addScaledVector(up, Math.sin(angle) * radius).normalize();
+      const offset = pelletOffset(definition, pellet);
+      const direction = centerDirection.clone().addScaledVector(right, offset.x).addScaledVector(up, offset.y).normalize();
       // 从腰射枪口重新检测遮挡；右键举枪不会改变此处的弹道起点。
       const trace = this.traceWeapon(muzzle, direction, definition);
       const firstTarget = this.zombieField.decode(trace.targets[0]);
@@ -760,7 +759,9 @@ export class Game {
         else this.audio.tone(head ? 1100 : 800, 450, 0.07, 0.025);
       }
       if (trace.impact && !killedAtImpact && definition.kind !== 'flame' && definition.kind !== 'melee') {
-        for (let i = 0; i < 9; i++) {
+        // 霰弹增加射线数量后减少每颗弹丸的装饰粒子，避免清群时特效数量翻倍。
+        const impactParticles = definition.spreadVertical !== undefined ? 3 : 9;
+        for (let i = 0; i < impactParticles; i++) {
           const velocity = new THREE.Vector3((Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.3) * 2);
           this.addEffect(trace.end.clone(), velocity, new THREE.Vector3().setScalar(0.035 + Math.random() * 0.055), firstTarget ? 0xc6ad78 : 0xb0ac85, 0.3 + Math.random() * 0.3, 5, true);
         }
