@@ -34,7 +34,7 @@ export function ResultPanel({ result, entries, saved, record, breach, onRetry, o
   const focus = useRef<HTMLHeadingElement>(null);
   useEffect(() => { focus.current?.focus({ preventScroll: true }); }, []);
   const rank = entries.filter(r => r.difficulty === result.difficulty).findIndex(r => r.id === result.id);
-  const culprit = result.cause === 'water' ? '落入河流，无法继续生存' : breach ? `${ZOMBIE_TYPES[breach.kind].label}从${breach.side}发动致命攻击` : '生命值已耗尽';
+  const culprit = result.cause === 'water' ? '落水后生命值耗尽' : breach ? `${ZOMBIE_TYPES[breach.kind].label}从${breach.side}发动致命攻击` : '生命值已耗尽';
   return <section className="result-screen" aria-label="游戏结束"><div className="result-panel">
     <div className="result-summary"><span className="label">PERIMETER BREACHED</span><h2 ref={focus} tabIndex={-1}>{result.cause === 'water' ? '落水失败' : '防线失守'}</h2><p>{culprit}，游戏失败。</p>
       <span className="result-time-label">{result.mode === 'practice' ? '练习结束' : `已守住 · ${DIFFICULTIES[result.difficulty].label}难度`}</span><strong className="result-time" data-testid="survival-result">{result.mode === 'practice' ? '不计分' : `${result.waves} 波`}</strong>{result.mode === 'survival' && <p>结束于第 {result.wave} 波 · 坚守 {formatDuration(result.duration, true)}</p>}

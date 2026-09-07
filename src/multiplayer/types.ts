@@ -16,6 +16,7 @@ export interface SteamBridge {
 }
 declare global { interface Window { steamCoop?: SteamBridge; } }
 export interface Pawn extends Member {
+  waterReturns?: number;
   x: number; z: number; height: number; yaw: number; pitch: number; health: number; lastDamageAt: number; weapon: number; shots: number;
   ammo: number; reloading: boolean; reloadProgress: number; reloadEmpty: boolean; appearance: PlayerAppearance;
 }
@@ -55,6 +56,7 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
     && s.wave >= 1 && s.wavesCleared <= s.wave && finite(s.elapsed, 1e8) && s.elapsed >= 0 && finite(s.intermission, 5) && s.intermission >= 0
     && members.length >= 2 && members.length <= 4 && Array.isArray(s.players) && s.players.length === members.length && s.players.every(p => p && typeof p === 'object') && new Set(s.players.map(p => p.id)).size === members.length
     && s.players.every(p => members.some(m => m.id === p.id) && typeof p.name === 'string' && p.name.length <= 128
+      && (p.waterReturns === undefined || Number.isSafeInteger(p.waterReturns) && p.waterReturns >= 0)
       && finite(p.x, 22) && finite(p.z, 48) && finite(p.height, 3) && p.height >= 0
       && finite(p.yaw, 1e6) && finite(p.pitch, 1.49) && finite(p.health, 100) && p.health >= 0
       && Number.isFinite(p.lastDamageAt) && Number.isInteger(p.weapon) && p.weapon >= 0 && p.weapon < 10

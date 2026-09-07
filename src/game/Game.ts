@@ -686,7 +686,10 @@ export class Game {
       const clearedBefore = this.encounter.wavesCleared;
       this.encounter.update(delta, this.spawnEnemy, step => {
         if (local.health > 0) {
-          if (this.playerMotion.update(this.encounter.player, this.view.x, keys, step, this.navigation, this.encounter.zombies)) local.health = 0;
+          if (this.playerMotion.update(this.encounter.player, this.view.x, keys, step, this.navigation, this.encounter.zombies)) {
+            coop.returnFromWater(local); this.playerMotion.reset();
+            Object.assign(this.encounter.player, { x: local.x, z: local.z });
+          }
           local.x = this.encounter.player.x; local.z = this.encounter.player.z; local.height = this.playerMotion.height;
         }
         local.yaw = this.view.x; local.pitch = this.view.y; local.weapon = this.arsenal.active; local.shots = this.arsenal.shots;
@@ -844,7 +847,7 @@ export class Game {
       else this.encounter.update(delta, this.spawnEnemy, step => {
         const drowned = this.playerMotion.update(this.encounter.player, this.view.x, this.keys, step, this.navigation, this.encounter.zombies);
         this.encounter.playerHeight = this.playerMotion.height;
-        if (drowned) this.encounter.drown();
+        if (drowned) { this.encounter.drown(); this.playerMotion.reset(); }
       });
       if (this.encounter.health < previousHealth) { this.audio.tone(110, 45, 0.14, 0.06); this.publish(); }
       this.zombieField.sync(this.encounter);

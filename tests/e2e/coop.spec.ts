@@ -6,7 +6,7 @@ import { WEAPONS } from '../../src/game/weapons';
 import { defaultAppearance } from '../../src/multiplayer/appearance';
 
 test('双端房间开局、双方射击清波、一人观战与全员死亡结算', async ({ browser }) => {
-  test.setTimeout(240000);
+  test.setTimeout(360000);
   const contexts = [await browser.newContext({ viewport: { width: 1440, height: 900 } }), await browser.newContext({ viewport: { width: 1440, height: 900 } })];
   const pages = [await contexts[0].newPage(), await contexts[1].newPage()];
   const errors: string[] = [];
@@ -141,7 +141,14 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await expect.poll(async () => (await snapshot(guest)).weaponIndex).toBe(2);
     expect((await snapshot(guest)).weaponAnimation.model).toBe(WEAPONS[2].model);
     await control(guest); await lookAt(guest, 2, 1.7, -40); await guest.keyboard.down('w');
-    await expect.poll(async () => (await snapshot(guest)).health, { timeout: 15000 }).toBe(0); await guest.keyboard.up('w');
+    await expect.poll(async () => (await snapshot(guest)).coop!.players.find(p => p.id === '222')?.waterReturns ?? 0, { timeout: 15000 }).toBeGreaterThan(0);
+    await guest.keyboard.up('w');
+    const returned = await snapshot(guest);
+    expect(returned.health).toBeGreaterThan(0); expect(returned.health).toBeLessThanOrEqual(90);
+    expect(returned.player.z).toBeGreaterThan(0); expect(returned.phase).toBe('playing');
+    await guest.keyboard.down('w');
+    // 连续落水每次只扣10血；只有最终生命耗尽才进入观战。
+    await expect.poll(async () => (await snapshot(guest)).health, { timeout: 90000 }).toBe(0); await guest.keyboard.up('w');
     await expect(guest.getByText(/你已阵亡 · 正在观战/)).toBeVisible();
     expect((await snapshot(host)).health).toBeGreaterThan(0);
     expect((await snapshot(guest)).phase).toBe('playing');
@@ -162,7 +169,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
     await guest.screenshot({ path: 'test-results/coop-spectating.png' });
     await guest.evaluate(() => window.dispatchEvent(new Event('blur')));
     await control(host); await lookAt(host, -2, 1.7, -40); await host.keyboard.down('w');
-    await expect(host.getByRole('heading', { name: '小队全员阵亡' })).toBeVisible({ timeout: 15000 }); await host.keyboard.up('w');
+    await expect(host.getByRole('heading', { name: '小队全员阵亡' })).toBeVisible({ timeout: 90000 }); await host.keyboard.up('w');
     // 队员保持在后台，也必须收到结算而非二十秒后误报断线。
     await expect.poll(async () => (await snapshot(guest)).phase).toBe('failed');
     await expect(guest.getByRole('heading', { name: '小队全员阵亡' })).toBeVisible();

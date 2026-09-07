@@ -41,7 +41,7 @@ export class CoopSession {
     this.host = match.host === match.local;
     this.selectedAppearance = normalizeAppearance(appearance);
     this.players = match.members.map((member, index) => ({ ...member, ...SPAWNS[index], height: 0, yaw: 0, pitch: 0,
-      health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1,
+      waterReturns: 0, health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1,
       reloadEmpty: false, appearance: member.id === match.local ? normalizeAppearance(appearance) : defaultAppearance(index) }));
     for (const player of this.remotes) this.controllers.set(player.id, {
       motion: new PlayerMotion(), arsenal: new Arsenal(), keys: new Set(), lastInputAt: 0, lastPacketAt: performance.now(),
@@ -113,6 +113,7 @@ export class CoopSession {
     if (!validWorld(data, this.match.members) || data.seq <= this.worldSeq) return;
     this.worldSeq = data.seq; this.lastPacketAt = performance.now();
     const wasDead = this.local.health === 0;
+    const waterReturns = this.local.waterReturns ?? 0;
     for (const player of data.players) {
       const pawn = this.players.find(value => value.id === player.id)!;
       Object.assign(pawn, player);
@@ -126,7 +127,7 @@ export class CoopSession {
     }
     const input = data.inputs.find(value => value.id === this.local.id);
     this.authoritativeKeys = new Set(input?.keys ?? []);
-    if (wasDead && this.local.health > 0) {
+    if ((wasDead && this.local.health > 0) || (this.local.waterReturns ?? 0) > waterReturns) {
       Object.assign(this.encounter.player, { x: this.local.x, z: this.local.z });
       this.revived = true;
     }
@@ -174,7 +175,7 @@ export class CoopSession {
       controller.arsenal.update(delta);
       if (performance.now() - controller.lastInputAt > 500) controller.keys.clear();
       if (player.health > 0) {
-        if (controller.motion.update(player, player.yaw, controller.keys, delta, navigation, this.encounter.zombies)) player.health = 0;
+        if (controller.motion.update(player, player.yaw, controller.keys, delta, navigation, this.encounter.zombies)) { this.returnFromWater(player); controller.motion.reset(); }
         player.height = controller.motion.height;
         while (controller.commands.length) {
           const command = controller.commands[0];
@@ -193,6 +194,14 @@ export class CoopSession {
   }
 
   advanceRemote(delta: number, navigation: Navigation, fire: (pawn: Pawn, arsenal: Arsenal) => void) { this.advanceRemotes(delta, navigation, fire); }
+
+  returnFromWater(player: Pawn) {
+    if (!this.host || player.health <= 0) return;
+    const index = this.players.findIndex(pawn => pawn.id === player.id);
+    if (index < 0) return;
+    Object.assign(player, SPAWNS[index], { height: 0, health: Math.max(0, player.health - 10),
+      lastDamageAt: this.encounter.elapsed, waterReturns: (player.waterReturns ?? 0) + 1 });
+  }
 
   reviveAll() {
     const localWasDead = this.local.health === 0;

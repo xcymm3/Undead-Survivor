@@ -56,24 +56,27 @@ test('空格跳跃可过河、空中暂停冻结、落岸后正常射击', async
   await page.screenshot({ path: 'test-results/river-crossing.png' });
 });
 
-test('玩家直接走入河流立即判负，练习不写榜，重开复位', async ({ page }) => {
+test('走入河流扣10血回出生点，继续练习且不写榜', async ({ page }) => {
   test.setTimeout(30000);
-  await start(page);
-  await lookAt(page, 0, 1.7, -40);
-  await page.keyboard.down('w');
-  await expect(page.getByRole('heading', { name: '落水失败' })).toBeVisible({ timeout: 15000 });
+  await start(page); const initial = await snapshot(page);
+  await lookAt(page, 0, 1.7, -40); await page.keyboard.down('w');
+  await page.evaluate(async () => {
+    const deadline = performance.now() + 15000;
+    while (window.__undeadTower!.snapshot().health === 100 && performance.now() < deadline) await new Promise(requestAnimationFrame);
+    // 在传送帧松开前进键，避免慢速轮询期间又从出生点走出数米。
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+  });
   await page.keyboard.up('w');
-  const end = await snapshot(page);
-  expect(end.result!.cause).toBe('water'); expect(end.breach).toBeNull(); expect(end.pointerLocked).toBe(false);
+  const returned = await snapshot(page);
+  expect(returned.health).toBe(90); expect(returned.phase).toBe('playing'); expect(returned.overWater).toBe(false);
+  expect(Math.hypot(returned.player.x - initial.player.x, returned.player.z - initial.player.z)).toBeLessThan(2);
+  expect(returned.jump).toEqual({ height: 0, velocity: 0, grounded: true });
   expect(await page.evaluate(key => localStorage.getItem(key), LEADERBOARD_KEY)).toBeNull();
-  await expect(page.getByText('练习模式，不计入排行榜。')).toBeVisible();
-  await page.screenshot({ path: 'test-results/river-failure.png' });
-  await page.getByRole('button', { name: '再守一次' }).click(); await capture(page);
-  const reset = await snapshot(page);
-  expect(reset.health).toBe(100); expect(reset.jump).toEqual({ height: 0, velocity: 0, grounded: true });
+  await page.waitForTimeout(300); expect((await snapshot(page)).health).toBe(90);
+  await page.screenshot({ path: 'test-results/river-return.png' });
 });
 
-test('完整清波后休整、升波增加配额与移速，落水按守住波数记榜', async ({ page }) => {
+test('完整清波后休整、升波增加配额与移速，落水扣血后保留当前波次', async ({ page }) => {
   test.setTimeout(150000);
   await start(page, 'survival');
   await expect.poll(async () => (await snapshot(page)).waveSpawned, { timeout: 15000 }).toBe(9);
@@ -119,13 +122,11 @@ test('完整清波后休整、升波增加配额与移速，落水按守住波�
   await expect.poll(async () => (await snapshot(page)).wave, { timeout: 8000 }).toBe(2);
   const next = await snapshot(page); expect(next.waveTotal).toBe(15); expect(next.pressure.speed).toBeCloseTo(WAVES.firstSpeed + WAVES.speedGrowth);
   await lookAt(page, 0, 1.7, -40); await page.keyboard.down('w');
-  await expect(page.getByRole('heading', { name: '落水失败' })).toBeVisible({ timeout: 15000 });
+  await expect.poll(async () => (await snapshot(page)).player.z, { timeout: 15000 }).toBeLessThan(-10);
+  await expect.poll(async () => (await snapshot(page)).player.z, { timeout: 15000 }).toBeGreaterThan(0);
   await page.keyboard.up('w');
-  await expect(page.getByTestId('survival-result')).toHaveText('1 波');
-  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), LEADERBOARD_KEY);
-  expect(saved[0].waves).toBe(1); expect(saved[0].wave).toBe(2); expect(saved[0].cause).toBe('water');
-  await page.screenshot({ path: 'test-results/waves-result.png' });
-  await page.reload(); await page.getByRole('button', { name: '排行榜' }).click();
-  await expect(page.getByRole('columnheader', { name: '守住波数' })).toBeVisible();
-  await expect(page.getByRole('table')).toContainText('1 波');
+  const returned = await snapshot(page);
+  expect(returned.phase).toBe('playing'); expect(returned.wavesCleared).toBe(1); expect(returned.wave).toBe(2);
+  expect(returned.health).toBeLessThanOrEqual(90); expect(returned.overWater).toBe(false);
+  expect(await page.evaluate(key => localStorage.getItem(key), LEADERBOARD_KEY)).toBeNull();
 });

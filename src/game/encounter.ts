@@ -87,7 +87,9 @@ export class Encounter {
 
   drown() {
     if (this.failed) return;
-    this.health = 0; this.failed = true; this.failureCause = 'water'; this.breachedId = null;
+    this.health = Math.max(0, this.health - 10); this.lastDamageAt = this.elapsed;
+    Object.assign(this.player, { x: SURVIVAL.playerX, z: SURVIVAL.playerZ }); this.playerHeight = 0;
+    if (this.health === 0) { this.failed = true; this.failureCause = 'water'; this.breachedId = null; }
   }
   get pressure() { return waveSettings(this.wave); }
   get waveRemaining() { return this.waveQueue.length + this.alive; }

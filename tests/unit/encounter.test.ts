@@ -63,12 +63,16 @@ describe('练习与正式模式', () => {
       expect(e.waveSpawned).toBe(9);
     }
   });
-  it('落水直接失败且冻结波次，练习落水也结束；重开清空', () => {
+  it('落水扣10血回出生点，血量耗尽才失败；练习同样处理', () => {
     for (const mode of ['practice', 'survival'] as const) {
-      const e = new Encounter(); e.reset(mode, 'hard'); e.drown();
-      expect(e.failureCause).toBe('water'); expect(e.health).toBe(0); expect(e.breachedId).toBeNull();
-      e.update(100, farSpawn); expect(e.waveSpawned).toBe(0); expect(e.wavesCleared).toBe(0);
-      e.reset(mode, 'hard'); expect(e.failed).toBe(false); expect(e.health).toBe(100); expect(e.wave).toBe(1);
+      const e = new Encounter(); e.reset(mode, 'hard'); e.player = { x: 0, z: -17 }; e.playerHeight = 1;
+      e.drown();
+      expect(e.health).toBe(90); expect(e.failed).toBe(false); expect(e.failureCause).toBeNull();
+      expect(e.player).toEqual({ x: SURVIVAL.playerX, z: SURVIVAL.playerZ }); expect(e.playerHeight).toBe(0);
+      for (let i = 0; i < 9; i++) e.drown();
+      expect(e.failureCause).toBe('water'); expect(e.health).toBe(0);
+      e.update(100, farSpawn); expect(e.waveSpawned).toBe(0);
+      e.reset(mode, 'hard'); expect(e.failed).toBe(false); expect(e.health).toBe(100);
     }
   });
 

@@ -59,8 +59,8 @@ describe('2～4 人房主权威模拟', () => {
     host.lastInputAt = performance.now() - 600;
     host.advanceRemote(.1, nav, () => {}); expect(host.remote.z).toBeCloseTo(8.58);
   });
-  it('空格由房主计算跳跃，落水只杀死对应玩家', () => {
-    const { host, a } = pair();
+  it('空格由房主计算跳跃，落水只扣对应玩家10血并同步传送', () => {
+    const { host, guest, a, packets } = pair();
     host.receive('222', { type: 'input', seq: 1, keys: [], yaw: 0, pitch: 0, jump: 1 });
     host.advanceRemote(.1, nav, () => {}); expect(host.remote.height).toBeGreaterThan(.5);
     const velocity = host.remoteMotion.velocity;
@@ -68,8 +68,12 @@ describe('2～4 人房主权威模拟', () => {
     host.advanceRemote(.1, nav, () => {}); expect(host.remoteMotion.velocity).toBeLessThan(velocity);
     host.remoteMotion.reset(); host.remote.x = 0; host.remote.z = -17;
     a.update(.05, () => null, step => host.advanceRemote(step, nav, () => {}));
-    expect(host.remote.health).toBe(0); expect(a.failed).toBe(false);
-    host.local.health = 0; a.update(.05, () => null); expect(a.failed).toBe(true);
+    expect(host.remote.health).toBe(90); expect(a.failed).toBe(false);
+    expect(host.remote.x).toBe(3); expect(host.remote.z).toBe(9); expect(host.remote.height).toBe(0);
+    host.broadcast(.1, true); guest.receive('111', packets.at(-1));
+    expect(guest.local.health).toBe(90); expect(guest.encounter.player).toEqual({ x: 3, z: 9 });
+    expect(guest.consumeRevival()).toBe(true); expect(guest.consumeRevival()).toBe(false);
+    host.remote.health = 0; host.local.health = 0; a.update(.05, () => null); expect(a.failed).toBe(true);
   });
   it('僵尸先挥臂再扣对应玩家血量，目标死亡后追击另一个存活玩家', () => {
     const { host, a } = pair(); host.local.health = 10;
