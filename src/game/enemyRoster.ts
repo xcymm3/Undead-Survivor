@@ -4,14 +4,12 @@ import type { Difficulty, ZombieKind } from './config';
 type Tier = 1 | 2 | 3 | 4;
 
 const TIER_WEIGHTS: { through: number; weights: readonly [number, number, number, number] }[] = [
-  { through: 3, weights: [1, 0, 0, 0] },
-  { through: 6, weights: [.92, .08, 0, 0] },
-  { through: 7, weights: [.86, .12, .02, 0] },
-  { through: 8, weights: [.81, .15, .04, 0] },
-  { through: 9, weights: [.76, .18, .06, 0] },
-  { through: 10, weights: [.70, .22, .07, .01] },
-  { through: 11, weights: [.65, .25, .08, .02] },
-  { through: Infinity, weights: [.60, .28, .10, .03] },
+  { through: 2, weights: [1, 0, 0, 0] },
+  { through: 4, weights: [.80, .20, 0, 0] },
+  { through: 6, weights: [.64, .26, .10, 0] },
+  { through: 8, weights: [.50, .28, .17, .05] },
+  { through: 10, weights: [.38, .30, .24, .08] },
+  { through: Infinity, weights: [.32, .30, .28, .10] },
 ];
 
 const POOLS: Record<Tier, readonly { kind: ZombieKind; weight: number }[]> = {
@@ -54,8 +52,8 @@ export function waveRoster(wave: number, count: number, difficulty: Difficulty =
   const roster = Array.from({ length: size }, () => difficulty === 'normal'
     ? weighted(POOLS[1], random).kind : randomZombieKind(wave, random));
   const normalizedWave = Math.max(1, Math.floor(wave));
-  // 第 10～12 波已进入四阶教学阶段：保留原概率分布，但整波未抽中时用末位补足一只。
-  if (difficulty === 'hard' && size > 0 && normalizedWave >= 10 && normalizedWave <= 12 && !roster.includes('football')) {
+  // 第 7～8 波引入四阶，整波未抽中时补一只，让两波一次的阶位推进可感知。
+  if (difficulty === 'hard' && size > 0 && normalizedWave >= 7 && normalizedWave <= 8 && !roster.includes('football')) {
     roster[size - 1] = 'football';
   }
   return roster;
@@ -63,11 +61,11 @@ export function waveRoster(wave: number, count: number, difficulty: Difficulty =
 
 export function simultaneousCap(kind: ZombieKind, wave: number, players: number) {
   const coop = players >= 3;
-  if (kind === 'shield' || kind === 'berserker') return coop ? 6 : 4;
-  if (kind === 'giant') return coop ? 2 : 1;
+  if (kind === 'shield' || kind === 'berserker') return wave >= 9 ? (coop ? 8 : 6) : (coop ? 6 : 4);
+  if (kind === 'giant') return wave >= 9 ? (coop ? 3 : 2) : (coop ? 2 : 1);
   if (kind === 'football') {
-    if (wave <= 12) return 1;
-    if (wave <= 18) return coop ? 3 : 2;
+    if (wave <= 8) return 1;
+    if (wave <= 10) return coop ? 3 : 2;
     return coop ? 4 : 3;
   }
   return Infinity;

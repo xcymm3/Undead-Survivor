@@ -71,7 +71,6 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && (z.attacking === undefined || typeof z.attacking === 'boolean')
       && (z.attackTarget === undefined || typeof z.attackTarget === 'string' && z.attackTarget.length <= 128)
       && (z.enraged === undefined || typeof z.enraged === 'boolean')
-      && (z.chargeAvoidRiver === undefined || typeof z.chargeAvoidRiver === 'boolean')
       && (z.specialState === undefined || ['ready', 'windup', 'charging', 'stunned'].includes(z.specialState))
       && (z.ragePause === undefined || finite(z.ragePause, 1) && z.ragePause >= 0)
       && (z.specialRemaining === undefined || finite(z.specialRemaining, 2) && z.specialRemaining >= 0)

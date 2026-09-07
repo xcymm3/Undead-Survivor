@@ -21,43 +21,41 @@ describe('八类僵尸数值与阶位名单', () => {
     expect(ZOMBIE_TYPES).toMatchObject({
       normal: { health: 100, armor: 0, tier: 1 }, cone: { health: 200, armor: 100, tier: 1 },
       bucket: { health: 400, armor: 300, tier: 1 }, imp: { health: 300, armor: 0, tier: 2 },
-      shield: { health: 600, armor: 400, tier: 2 }, berserker: { health: 1200, armor: 0, tier: 3 },
-      giant: { health: 2000, armor: 0, tier: 3 }, football: { health: 3750, armor: 2000, tier: 4 },
+      shield: { health: 700, armor: 500, tier: 2 }, berserker: { health: 1200, armor: 0, tier: 3 },
+      giant: { health: 6000, armor: 0, tier: 3 }, football: { health: 3750, armor: 2000, tier: 4 },
     });
   });
 
-  it('第七波起逐波平滑提高阶位概率', () => {
-    expect(tierWeights(1)).toEqual([1, 0, 0, 0]);
-    expect(tierWeights(4)).toEqual([.92, .08, 0, 0]);
-    expect(tierWeights(7)).toEqual([.86, .12, .02, 0]);
-    expect(tierWeights(8)).toEqual([.81, .15, .04, 0]);
-    expect(tierWeights(9)).toEqual([.76, .18, .06, 0]);
-    expect(tierWeights(10)).toEqual([.70, .22, .07, .01]);
-    expect(tierWeights(11)).toEqual([.65, .25, .08, .02]);
-    expect(tierWeights(12)).toEqual([.60, .28, .10, .03]);
-    expect(tierWeights(100)).toEqual([.60, .28, .10, .03]);
+  it('每两波推进阶位，第九波提高混合精英权重', () => {
+    const stages = [[1, 0, 0, 0], [.80, .20, 0, 0], [.64, .26, .10, 0], [.50, .28, .17, .05], [.38, .30, .24, .08]];
+    stages.forEach((weights, index) => {
+      expect(tierWeights(index * 2 + 1)).toEqual(weights);
+      expect(tierWeights(index * 2 + 2)).toEqual(weights);
+    });
+    expect(tierWeights(11)).toEqual([.32, .30, .28, .10]);
+    expect(tierWeights(100)).toEqual([.32, .30, .28, .10]);
   });
 
-  it('前三波只有一阶；第10～12波在概率抽取外保底一只四阶', () => {
-    for (const wave of [1, 2, 3]) expect(waveRoster(wave, waveSettings(wave).count, 'hard', () => .2)
+  it('前两波只有一阶，第七和第八波保底一只四阶且不增加波次总量', () => {
+    for (const wave of [1, 2]) expect(waveRoster(wave, waveSettings(wave).count, 'hard', () => .99)
       .every(kind => ['normal', 'cone', 'bucket'].includes(kind))).toBe(true);
-    for (const wave of [10, 11, 12]) {
-      const tierOneRoll = waveRoster(wave, waveSettings(wave).count, 'hard', () => 0);
-      expect(tierOneRoll).toHaveLength(waveSettings(wave).count);
-      expect(tierOneRoll.filter(kind => kind === 'football')).toHaveLength(1);
+    for (const wave of [7, 8]) {
+      const roster = waveRoster(wave, waveSettings(wave).count, 'hard', () => 0);
+      expect(roster).toHaveLength(waveSettings(wave).count);
+      expect(roster.filter(kind => kind === 'football')).toHaveLength(1);
     }
-    expect(waveRoster(10, 1, 'hard', () => .999)).toEqual(['football']);
-    expect(waveRoster(9, waveSettings(9).count, 'hard', () => 0)).not.toContain('football');
-    expect(waveRoster(13, waveSettings(13).count, 'hard', () => 0)).not.toContain('football');
+    expect(waveRoster(6, 20, 'hard', () => .999)).not.toContain('football');
+    expect(waveRoster(7, 1, 'hard', () => .999)).toEqual(['football']);
+    expect(waveRoster(9, 20, 'hard', () => 0)).not.toContain('football');
   });
 
   it('盾牌可从侧后绕过且破盾不会加速，狂暴恰在4x生命触发', () => {
     const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
     const shield = actor('shield'); encounter.zombies = [shield];
     encounter.hit(shield.id, false, 50, false);
-    expect(shield).toMatchObject({ bodyHealth: 150, armorHealth: 400, health: 550 });
+    expect(shield).toMatchObject({ bodyHealth: 150, armorHealth: 500, health: 650 });
     expect(zombieMoveSpeed(shield, 2)).toBeCloseTo(2.2);
-    encounter.hit(shield.id, false, 400, true);
+    encounter.hit(shield.id, false, 500, true);
     expect(shield.armorHealth).toBe(0);
     expect(zombieMoveSpeed(shield, 2)).toBeCloseTo(2.2);
     const berserker = actor('berserker'); encounter.zombies = [berserker];
@@ -66,7 +64,7 @@ describe('八类僵尸数值与阶位名单', () => {
     expect(berserker.ragePause).toBe(ENEMY_RULES.berserker.ragePause);
     expect(zombieMoveSpeed(berserker, 2)).toBe(0);
     berserker.ragePause = 0;
-    expect(zombieMoveSpeed(berserker, 2)).toBe(4);
+    expect(zombieMoveSpeed(berserker, 2)).toBeCloseTo(5.2);
   });
 
   it('持盾者正面150度内由盾牌接弹，背面射击绕过盾牌', () => {
@@ -87,37 +85,57 @@ describe('八类僵尸数值与阶位名单', () => {
     } finally { field.dispose(); (field.material as { dispose(): void }).dispose(); }
   });
 
-  it('巨人始终保持0.75x移速，橄榄球常速为1.5x且破甲后为1.25x', () => {
+  it('巨人始终保持0.75x移速，橄榄球常速为1.65x且破甲后为1.35x', () => {
     const giant = actor('giant');
     expect(zombieMoveSpeed(giant, 2)).toBe(1.5);
     giant.health = 100; giant.bodyHealth = 100;
     expect(zombieMoveSpeed(giant, 2)).toBe(1.5);
     const football = actor('football');
-    expect(zombieMoveSpeed(football, 2)).toBe(3);
+    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(3.3);
     football.armorHealth = 0;
-    expect(zombieMoveSpeed(football, 2)).toBe(2.5);
+    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(2.7);
   });
 });
 
 describe('橄榄球冲锋和河道', () => {
-  it('朝河道冲锋时停在水外并眩晕1.5秒，随后改走桥梁', () => {
-    const navigation = new Navigation([], true), encounter = new Encounter(() => 0);
-    encounter.reset('survival', 'hard'); encounter.setNavigation(navigation);
+  it('隔河时直接绕桥追击，不蓄力冲河或白白眩晕', () => {
+    const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
+    encounter.setNavigation(new Navigation([], true)); encounter.wave = 10;
+    encounter.waveSpawned = encounter.pressure.count; encounter.waveQueue = [];
     encounter.player = { x: 0, z: riverCenter(0) - 7 };
-    const football = actor('football', 0, riverCenter(0) + 7);
-    encounter.zombies = [football]; encounter.waveQueue = []; encounter.waveSpawned = encounter.pressure.count;
-    for (let i = 0; i < 80 && football.specialState !== 'stunned'; i++) encounter.update(.05, () => null);
-    expect(football.specialState).toBe('stunned');
-    expect(football.specialRemaining).toBeGreaterThan(1.4);
-    expect(football.chargeAvoidRiver).toBe(true);
+    const football = actor('football', 0, riverCenter(0) + 7); encounter.zombies = [football];
+    const start = { x: football.x, z: football.z };
+    for (let i = 0; i < 20; i++) {
+      encounter.update(.05, () => null);
+      expect(football.specialState).toBe('ready');
+      expect(isWater(football)).toBe(false);
+    }
+    expect(Math.hypot(football.x - start.x, football.z - start.z)).toBeGreaterThan(.5);
+  });
+
+  for (const phase of ['windup', 'charging'] as const) it(`玩家在${phase}期间跳到对岸时取消冲锋并重新寻路`, () => {
+    const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
+    encounter.setNavigation(new Navigation([], true)); encounter.wave = 10;
+    encounter.waveSpawned = encounter.pressure.count; encounter.waveQueue = [];
+    encounter.player = { x: 0, z: -2 };
+    const football = actor('football', 0, -10); encounter.zombies = [football];
+    for (let i = 0; i < 20 && football.specialState !== phase; i++) encounter.update(.05, () => null);
+    expect(football.specialState).toBe(phase);
+    encounter.player = { x: 0, z: -24 }; encounter.update(.05, () => null);
+    expect(football.specialState).toBe('ready');
+    expect(football.specialCooldown).toBeGreaterThan(0);
     expect(isWater(football)).toBe(false);
-    const stopped = { x: football.x, z: football.z };
-    encounter.update(1, () => null);
-    expect(football.x).toBeCloseTo(stopped.x); expect(football.z).toBeCloseTo(stopped.z);
-    encounter.update(.6, () => null);
-    expect(football.specialState).toBe('ready');
-    encounter.update(.2, () => null);
-    expect(football.specialState).toBe('ready');
+  });
+
+  it('桥上直线路径畅通时允许冲锋，高波次速度达到8.5米每秒', () => {
+    const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
+    encounter.setNavigation(new Navigation([], true)); encounter.wave = 10;
+    encounter.waveSpawned = encounter.pressure.count; encounter.waveQueue = [];
+    encounter.player = { x: 10, z: riverCenter(10) - 5 };
+    const football = actor('football', 10, riverCenter(10) + 5); encounter.zombies = [football];
+    encounter.update(.05, () => null); expect(football.specialState).toBe('windup');
+    football.specialState = 'charging';
+    expect(zombieMoveSpeed(football, encounter.pressure.speed)).toBe(8.5);
   });
 
   it('第十波橄榄球完成蓄力和冲锋，命中只造成一次10点伤害', () => {
@@ -128,7 +146,7 @@ describe('橄榄球冲锋和河道', () => {
     for (let i = 0; i < 80 && encounter.health === 100; i++) encounter.update(.05, () => null);
     expect(encounter.health).toBe(90);
     expect(football.specialState).toBe('ready');
-    expect(football.specialCooldown).toBeGreaterThan(4);
+    expect(football.specialCooldown).toBeGreaterThan(3);
   });
 });
 

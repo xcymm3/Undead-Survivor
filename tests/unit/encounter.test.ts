@@ -25,11 +25,12 @@ describe('练习与正式模式', () => {
     expect(waveSettings(1)).toEqual({ count: 9, speed: 1.4, spawnRate: 1 });
     expect(Array.from({ length: 15 }, (_, index) => waveSettings(index + 1).count))
       .toEqual([9, 15, 21, 27, 33, 39, 44, 49, 53, 57, 61, 64, 67, 70, 73]);
-    expect(waveSettings(8)).toMatchObject({ count: 49, speed: 2.45 });
-    expect(waveSettings(8).spawnRate).toBeCloseTo(1.7);
-    expect(waveSettings(9).speed).toBe(2.5);
-    expect(waveSettings(11).spawnRate).toBe(2);
-    expect(waveSettings(100)).toEqual({ count: 328, speed: 2.5, spawnRate: 2 });
+    expect(waveSettings(8)).toMatchObject({ count: 49 });
+    expect(waveSettings(8).speed).toBeCloseTo(2.66);
+    expect(waveSettings(8).spawnRate).toBeCloseTo(2.26);
+    expect(waveSettings(9).speed).toBe(2.8);
+    expect(waveSettings(11).spawnRate).toBeCloseTo(2.8);
+    expect(waveSettings(100)).toEqual({ count: 328, speed: 2.8, spawnRate: 2.8 });
     const e = new Encounter(); e.reset('survival', 'hard');
     e.update(60, farSpawn); expect(e.waveSpawned).toBe(9); expect(e.totalSpawned).toBe(9);
     expect(e.wave).toBe(1); expect(e.wavesCleared).toBe(0);
@@ -120,7 +121,7 @@ describe('练习与正式模式', () => {
     for (const zombie of encounter.zombies) encounter.hit(zombie.id, true, 1000);
     encounter.update(.9, () => null);
     expect(encounter).toMatchObject({ health: 100, wavesCleared: 1 });
-    expect(encounter.intermission).toBeGreaterThan(4);
+    expect(encounter.intermission).toBeGreaterThan(WAVES.rest - 1);
   });
 
   it('击杀的僵尸不会造成失败，尸体被回收，重开清空全部状态', () => {
@@ -145,9 +146,9 @@ describe('练习与正式模式', () => {
     encounter.update(40, () => ({ x: 10000, z: -10000 }));
     expect(encounter.zombies.length).toBeLessThanOrEqual(SURVIVAL.maxZombies);
     expect(encounter.zombies.length).toBeGreaterThanOrEqual(79);
-    expect(encounter.zombieCounts.shield).toBeLessThanOrEqual(4);
-    expect(encounter.zombieCounts.berserker).toBeLessThanOrEqual(4);
-    expect(encounter.zombieCounts.giant).toBeLessThanOrEqual(1);
+    expect(encounter.zombieCounts.shield).toBeLessThanOrEqual(6);
+    expect(encounter.zombieCounts.berserker).toBeLessThanOrEqual(6);
+    expect(encounter.zombieCounts.giant).toBeLessThanOrEqual(2);
     expect(encounter.zombieCounts.football).toBeLessThanOrEqual(3);
   }, 15000);
 });

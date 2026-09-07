@@ -13,7 +13,7 @@ export interface Zombie extends SpawnPosition {
   id: number; kind: ZombieKind; health: number; bodyHealth?: number; maxHealth: number; armorHealth: number;
   downTime: number; bornAt: number; avoidance?: number; heading?: number; attacking?: boolean; attackTime?: number;
   attackTarget?: string; enraged?: boolean; ragePause?: number; specialState?: FootballState; specialRemaining?: number;
-  specialCooldown?: number; chargeAvoidRiver?: boolean;
+  specialCooldown?: number;
 }
 export const PRACTICE_POSITIONS: Position[] = [{ x: -5.8, z: -9.5 }, { x: 0.15, z: -22 }, { x: 5.4, z: -21 }, { x: -1, z: -31 }];
 
@@ -134,18 +134,20 @@ export class Encounter {
   private chargePossible(zombie: Zombie, target: Position) {
     if (!this.navigation || zombie.armorHealth <= 0 || zombie.specialState !== 'ready' || (zombie.specialCooldown ?? 0) > 0) return false;
     const range = Math.hypot(target.x - zombie.x, target.z - zombie.z);
-    if (range < ENEMY_RULES.football.chargeMin || range > ENEMY_RULES.football.chargeMax) return false;
-    const clearNormally = this.navigation.clear(zombie, target);
-    if (zombie.chargeAvoidRiver) {
-      if (!clearNormally) return false;
-      zombie.chargeAvoidRiver = false;
-    }
-    return clearNormally || this.navigation.clear(zombie, target, true);
+    const rule = ENEMY_RULES.football;
+    const reach = Math.min(this.pressure.speed * rule.chargeSpeed, rule.chargeSpeedCap) * rule.chargeDuration + rule.contactRadius;
+    if (range < rule.chargeMin || range > Math.min(rule.chargeMax, reach)) return false;
+    // 冲锋必须沿可通行直线抵达目标，不能忽略河流后白白撞岸。
+    return this.navigation.clear(zombie, target);
   }
 
   private prepareSpecials(targets: Map<number, Pawn>) {
     for (const zombie of this.zombies) if (zombie.health > 0 && zombie.kind === 'football') {
       const target = targets.get(zombie.id) ?? this.player;
+      if ((zombie.specialState === 'windup' || zombie.specialState === 'charging') && !this.navigation?.clear(zombie, target)) {
+        this.cancelCharge(zombie);
+        continue;
+      }
       if (this.chargePossible(zombie, target)) {
         zombie.specialState = 'windup'; zombie.specialRemaining = ENEMY_RULES.football.chargeWindup;
         zombie.attackTime = 0; zombie.attacking = false;
@@ -153,10 +155,15 @@ export class Encounter {
     }
   }
 
-  private stunFootball(zombie: Zombie, duration: number, river = false) {
+  private cancelCharge(zombie: Zombie) {
+    zombie.specialState = 'ready'; zombie.specialRemaining = 0;
+    zombie.specialCooldown = ENEMY_RULES.football.replanCooldown;
+    zombie.attacking = false; zombie.attackTime = 0;
+  }
+
+  private stunFootball(zombie: Zombie, duration: number) {
     zombie.specialState = 'stunned'; zombie.specialRemaining = duration;
     zombie.specialCooldown = ENEMY_RULES.football.chargeCooldown; zombie.attacking = false; zombie.attackTime = 0;
-    if (river) zombie.chargeAvoidRiver = true;
   }
 
   private advanceStatuses(step: number) {
@@ -251,7 +258,10 @@ export class Encounter {
       }
       for (const id of blocked) {
         const zombie = this.zombies.find(candidate => candidate.id === id && candidate.kind === 'football' && candidate.specialState === 'charging');
-        if (zombie) this.stunFootball(zombie, waterBlocked.has(id) ? ENEMY_RULES.football.riverStun : ENEMY_RULES.football.obstacleStun, waterBlocked.has(id));
+        if (zombie) {
+          if (waterBlocked.has(id)) this.cancelCharge(zombie);
+          else this.stunFootball(zombie, ENEMY_RULES.football.obstacleStun);
+        }
       }
       this.elapsed += step;
       for (const zombie of this.zombies) if (zombie.health > 0) this.attack(zombie, targets.get(zombie.id), targets, step);

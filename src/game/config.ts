@@ -3,7 +3,7 @@ import type { ReloadStage } from './reloadAnimation';
 
 export const CONFIG = {
   camera: { fov: 61, height: 1.7, sensitivity: 0.0022, pitchLimit: 85 * Math.PI / 180 },
-  weapon: { capacity: 30, interval: 0.15, reloadDuration: 1.25, range: 180 },
+  weapon: { capacity: 30, interval: .12, reloadDuration: 1.60, range: 180 },
   target: { respawn: 3, bodyDamage: 50, headDamage: 100 },
 } as const;
 
@@ -12,15 +12,15 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 export const FIXED_DIFFICULTY = 'hard' satisfies Difficulty;
 export type ZombieKind = 'normal' | 'cone' | 'bucket' | 'imp' | 'shield' | 'berserker' | 'giant' | 'football';
 export type GamePhase = 'ready' | 'playing' | 'paused' | 'breaching' | 'failed';
-export const WAVES = { firstCount: 9, firstSpeed: 1.4, speedGrowth: 0.15, maxSpeed: 2.5, spawnRate: 1, spawnGrowth: 0.1, rest: 5 } as const;
+export const WAVES = { firstCount: 9, firstSpeed: 1.4, speedGrowth: .18, maxSpeed: 2.8, spawnRate: 1, spawnGrowth: .18, rest: 3 } as const;
 export const ZOMBIE_TYPES = {
   normal: { label: '普通僵尸', health: 100, armor: 0, tier: 1 },
   cone: { label: '路障僵尸', health: 200, armor: 100, tier: 1 },
   bucket: { label: '铁桶僵尸', health: 400, armor: 300, tier: 1 },
   imp: { label: '小鬼僵尸', health: 300, armor: 0, tier: 2 },
-  shield: { label: '持盾僵尸', health: 600, armor: 400, tier: 2 },
+  shield: { label: '持盾僵尸', health: 700, armor: 500, tier: 2 },
   berserker: { label: '狂暴僵尸', health: 1200, armor: 0, tier: 3 },
-  giant: { label: '巨人僵尸', health: 2000, armor: 0, tier: 3 },
+  giant: { label: '巨人僵尸', health: 6000, armor: 0, tier: 3 },
   football: { label: '橄榄球僵尸', health: 3750, armor: 2000, tier: 4 },
 } as const;
 export const ZOMBIE_KINDS = Object.keys(ZOMBIE_TYPES) as ZombieKind[];
@@ -28,12 +28,12 @@ export const emptyZombieCounts = () => Object.fromEntries(ZOMBIE_KINDS.map(kind 
 export const ENEMY_RULES = {
   imp: { speed: 1.75, speedCap: 4, scale: .65, contactRadius: 1, separationRadius: .85, windup: .18, duration: .7 },
   shield: { speed: 1.1, speedCap: 3.6, scale: 1.05, contactRadius: 1.3, windup: .3, duration: 1, exposeDuration: .45 },
-  berserker: { health: 1200, speed: 1.35, rageAt: 600, ragePause: .35, rageSpeed: 2, speedCap: 4.3,
+  berserker: { health: 1200, speed: 1.35, rageAt: 600, ragePause: .30, rageSpeed: 2.6, speedCap: 5.8,
     windup: .25, duration: .85, rageWindup: .15, rageDuration: .55 },
   giant: { speed: .75, scale: 1.8, contactRadius: 1.8, separationRadius: 2.1, windup: .65, duration: 1.5, slamRadius: 2.4 },
-  football: { speed: 1.5, brokenSpeed: 1.25, speedCap: 4, scale: 1.1, contactRadius: 1.35, windup: .2, duration: .7,
-    chargeMin: 7, chargeMax: 16, chargeWindup: .45, chargeSpeed: 2.4, chargeSpeedCap: 5, chargeDuration: 1.4,
-    chargeCooldown: 5, obstacleStun: 1.2, missStun: .8, riverStun: 1.5 },
+  football: { speed: 1.65, brokenSpeed: 1.35, speedCap: 4.5, scale: 1.1, contactRadius: 1.35, windup: .2, duration: .7,
+    chargeMin: 5, chargeMax: 16, chargeWindup: .35, chargeSpeed: 3.6, chargeSpeedCap: 8.5, chargeDuration: 1.9,
+    chargeCooldown: 3.2, obstacleStun: .9, missStun: .45, replanCooldown: .6 },
 } as const;
 export const zombieScale = (kind: ZombieKind) => kind === 'imp' ? ENEMY_RULES.imp.scale
   : kind === 'shield' ? ENEMY_RULES.shield.scale : kind === 'giant' ? ENEMY_RULES.giant.scale
@@ -50,12 +50,12 @@ export const ARMOR_SPAWNS = { normalPerCone: 3, conesPerBucket: 2 } as const;
 export const DIFFICULTIES = {
   easy: { label: '简单', description: '仅普通僵尸，爆头 1 枪击倒' },
   normal: { label: '普通', description: '开局即按比例混入路障僵尸，爆头需 2 枪' },
-  hard: { label: '困难', description: '阶位随波次平滑提升，第 12 波达到最终构成' },
+  hard: { label: '困难', description: '每两波提升敌人阶位，第 9～10 波进入高压混合尸群' },
 } as const;
 export const ARENA = { minX: -22, maxX: 22, minZ: -48, maxZ: 14 } as const;
 export const PLAYER = { health: 100, speed: 4.2, radius: 0.95, jumpSpeed: 8.4, gravity: 18, zombieClearanceHeight: 1.1 } as const;
 export const ATTACK = { damage: 10, windup: 0.35, duration: 1.1, damageProtection: 0.3 } as const;
-export const SURVIVAL = { maxSpawnRate: 2, maxZombies: 256, contactRadius: 1.25, spawnSafeRadius: 8, playerX: 0, playerZ: 9 } as const;
+export const SURVIVAL = { maxSpawnRate: 2.8, maxZombies: 256, contactRadius: 1.25, spawnSafeRadius: 8, playerX: 0, playerZ: 9 } as const;
 export const CROWD = { separationRadius: 1.35, maxLateralSpeed: 0.32, lateralFraction: 0.2, steeringDamping: 5, arrivalFade: 2 } as const;
 export interface RunResult {
   mode: GameMode; waves: number; wave: number; cause: 'zombie' | 'water';
