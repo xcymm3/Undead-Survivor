@@ -4,11 +4,12 @@ const { deflateRawSync, inflateRawSync } = require('node:zlib');
 const GAME = 'xcymm3.undead-survivor', VERSION = 'coop-v7';
 const UNRELIABLE_LIMIT = 1150, SNAPSHOT_CHUNK = 690;
 const idOf = value => String(value.steamId64);
+const playerName = value => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 128) : '';
 
 class SteamRooms {
   constructor(client, native, emit) {
     this.client = client; this.native = native; this.emit = emit; this.id = idOf(client.localplayer.getSteamId());
-    this.name = client.localplayer.getName().slice(0, 128); this.lobby = null; this.match = null; this.pending = null; this.ready = new Set(); this.lastPeer = 0;
+    this.name = playerName(client.localplayer.getName()) || '幸存者'; this.names = new Map(); this.lobby = null; this.match = null; this.pending = null; this.ready = new Set(); this.lastPeer = 0;
     this.snapshots = new Map();
     this.handles = [client.callback.register(6, ({ remote }) => {
       if (this.memberIds().includes(String(remote))) client.networking.acceptP2PSession(remote);
@@ -20,7 +21,7 @@ class SteamRooms {
   memberIds() { return this.lobby ? this.lobby.getMembers().map(idOf) : []; }
   room(lobby = this.lobby) {
     return lobby ? { id: String(lobby.id), name: lobby.getData('name') || '小队生存', owner: idOf(lobby.getOwner()),
-      members: lobby.getMembers().map(m => ({ id: idOf(m), name: idOf(m) === this.id ? this.name : `队友 ${idOf(m).slice(-4)}` })),
+      members: lobby.getMembers().map(m => ({ id: idOf(m), name: idOf(m) === this.id ? this.name : this.names.get(idOf(m)) || '正在连接…' })),
       playing: lobby.getData('state') !== 'waiting' } : null;
   }
   status() { return { available: true, id: this.id, name: this.name, message: 'Steam 已连接 · Spacewar 测试', appId: 480, room: this.room() }; }
@@ -33,7 +34,7 @@ class SteamRooms {
     if (!lobby.mergeFullData({ game: GAME, protocol: VERSION, name: String(name || `${this.name}的房间`).slice(0, 40), state: 'waiting' })) {
       lobby.leave(); throw Error('房间信息设置失败。');
     }
-    this.lobby = lobby; this.publish(); return this.room();
+    this.lobby = lobby; this.sendControl('hello'); this.publish(); return this.room();
   }); }
   search() { return this.exclusive(async () => {
     // Steam 480 共用大厅，查询前在服务端按本项目与协议筛选，避免被其他游戏的 50 条结果挤掉。
@@ -50,7 +51,7 @@ class SteamRooms {
     if (!this.compatible(lobby) || lobby.getData('state') !== 'waiting' || Number(lobby.getMemberCount()) > 4) {
       lobby.leave(); throw Error('房间不兼容、已满或已经开始。');
     }
-    this.lobby = lobby; this.lastPeer = Date.now(); this.publish(); return this.room();
+    this.lobby = lobby; this.lastPeer = Date.now(); this.sendControl('hello'); this.publish(); return this.room();
   }); }
   leave() {
     const lobby = this.lobby;
@@ -61,7 +62,7 @@ class SteamRooms {
         lobby.leave();
       }
     } finally {
-      this.lobby = null; this.match = null; this.pending = null; this.ready.clear(); this.snapshots.clear(); this.publish();
+      this.lobby = null; this.match = null; this.pending = null; this.ready.clear(); this.snapshots.clear(); this.names.clear(); this.publish();
     }
   }
   abort(message) { try { this.leave(); } catch { /* SDK 不可用时以本地清理为准。 */ } this.emit({ type: 'left', message }); }
@@ -76,7 +77,7 @@ class SteamRooms {
   sendControl(type, payload) { this.send({ type, payload }); }
   send(packet, mode = 2) {
     if (!this.lobby) return false;
-    const data = Buffer.from(JSON.stringify({ game: GAME, version: VERSION, room: String(this.lobby.id), ...packet }));
+    const data = Buffer.from(JSON.stringify({ game: GAME, version: VERSION, room: String(this.lobby.id), ...packet, playerName: this.name }));
     if (data.length > (mode === 0 ? UNRELIABLE_LIMIT : 128 * 1024)) return false;
     let sent = true;
     for (const id of this.memberIds()) if (id !== this.id) sent = this.client.networking.sendP2PPacket(BigInt(id), mode, data) && sent;
@@ -137,6 +138,16 @@ class SteamRooms {
         const from = idOf(packet.steamId); if (!this.lobby || from === this.id || !this.memberIds().includes(from)) continue;
         let p; try { p = JSON.parse(packet.data.toString('utf8')); } catch { continue; }
         if (!p || p.game !== GAME || p.version !== VERSION || p.room !== String(this.lobby.id)) continue;
+        // 名称取自发送端 Steam 账号，仅绑定真实 P2P 发送者，不能指定其他玩家的 ID。
+        const name = playerName(p.playerName);
+        if (name && this.names.get(from) !== name) {
+          this.names.set(from, name);
+          for (const state of [this.pending, this.match]) {
+            const member = state?.members.find(member => member.id === from);
+            if (member) member.name = name;
+          }
+          this.publish();
+        }
         this.lastPeer = Date.now();
         if (p.type === 'leave') { if (this.match || this.pending) this.abort('队友离开了对局。'); continue; }
         if (p.type === 'prepare' && from === idOf(this.lobby.getOwner()) && !this.match) {
@@ -144,7 +155,7 @@ class SteamRooms {
           if (!m || typeof m.session !== 'string' || m.session.length > 80 || m.host !== from || !Array.isArray(m.members)
             || m.members.length < 2 || m.members.length > 4 || !m.members.every(v => v && typeof v.id === 'string' && typeof v.name === 'string' && v.name.length <= 128)
             || this.memberIds().length !== m.members.length || !this.memberIds().every(id => m.members.some(v => v.id === id))) continue;
-          this.pending = { ...m, local: this.id }; this.pendingAt = Date.now(); this.sendControl('ready', m.session);
+          this.pending = { ...m, members: m.members.map(member => ({ ...member, name: member.id === this.id ? this.name : this.names.get(member.id) || member.name })), local: this.id }; this.pendingAt = Date.now(); this.sendControl('ready', m.session);
         } else if (p.type === 'ready' && this.pending?.host === this.id && p.payload === this.pending.session) {
           this.ready.add(from);
           if (this.pending.members.every(member => this.ready.has(member.id))) {

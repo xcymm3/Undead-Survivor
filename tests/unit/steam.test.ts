@@ -32,6 +32,19 @@ async function setup(join = true, count = 2) {
   await n.host.create('合作哨站'); if (join) for (const service of n.services.slice(1)) await service.join('999'); return n;
 }
 describe('Steam 房间与 P2P 协议', () => {
+  it('将 Steam 昵称绑定到真实发送者并传入房间和开局名单', async () => {
+    const { host, guest, services, events } = await setup(true, 4);
+    services.forEach((service, index) => { service.name = ['灰松', '夜航员', '渡鸦', '林间风'][index]; service.sendControl('hello'); });
+    services.forEach(service => service.poll());
+    expect(host.room().members.map((member: { name: string }) => member.name)).toEqual(['灰松', '夜航员', '渡鸦', '林间风']);
+    expect(guest.room().members.map((member: { name: string }) => member.name)).toEqual(['灰松', '夜航员', '渡鸦', '林间风']);
+    // 消息体不能伪造协议层昵称；发送端只从自己的 Steam 名称字段写入。
+    guest.send({ type: 'hello', playerName: '冒用房主', id: host.id }); host.poll();
+    expect(host.room().members[0].name).toBe('灰松'); expect(host.room().members[1].name).toBe('夜航员');
+    host.start(); services.slice(1).forEach(service => service.poll()); host.poll(); services.slice(1).forEach(service => service.poll());
+    const started = events['111'].find(event => event.type === 'start');
+    expect(started.match.members.map((member: { name: string }) => member.name)).toEqual(['灰松', '夜航员', '渡鸦', '林间风']);
+  });
   it('创建最多四人的公开房间、过滤共享 Spacewar 大厅、排除已满和不兼容房间', async () => {
     const { host, guest, lobby, members } = await setup(false);
     expect(host.client.matchmaking.createLobby).toHaveBeenCalledWith(2, 4);

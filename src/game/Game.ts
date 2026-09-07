@@ -350,6 +350,15 @@ export class Game {
 
   reset() { this.begin(this.encounter.mode); }
 
+  updateCoopMembers(members: { id: string; name: string }[]) {
+    if (!this.coop) return;
+    for (const member of members) {
+      const player = this.coop.players.find(player => player.id === member.id);
+      if (player) player.name = member.name;
+    }
+    this.publish();
+  }
+
   beginCoop(match: Match, send: (data: unknown) => void, appearance?: PlayerAppearance) {
     this.prepare('survival'); this.jumpSequence = 0;
     this.coop = new CoopSession(match, this.encounter, this.navigation, send, appearance);

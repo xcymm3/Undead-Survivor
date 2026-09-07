@@ -88,6 +88,7 @@ export function App() {
     const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
     const offSteam = window.steamCoop?.onEvent(event => {
       if (event.type === 'start') { setError(''); setFeedback(null); setMultiplayer(false); game.current?.beginCoop(event.match, data => window.steamCoop?.send(data), loadAppearance()); }
+      if (event.type === 'status' && event.status.room) game.current?.updateCoopMembers(event.status.room.members);
       if (event.type === 'packet') game.current?.receiveCoop(event.from, event.data);
       if (event.type === 'left') { game.current?.menu(); setError(event.message); setMultiplayer(true); }
       if (event.type === 'error') setError(event.message);
