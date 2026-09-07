@@ -22,7 +22,7 @@ describe('八类僵尸数值与阶位名单', () => {
       normal: { health: 100, armor: 0, tier: 1 }, cone: { health: 200, armor: 100, tier: 1 },
       bucket: { health: 400, armor: 300, tier: 1 }, imp: { health: 300, armor: 0, tier: 2 },
       shield: { health: 700, armor: 500, tier: 2 }, berserker: { health: 1200, armor: 0, tier: 3 },
-      giant: { health: 6000, armor: 0, tier: 3 }, football: { health: 3750, armor: 2000, tier: 4 },
+      giant: { health: 4000, armor: 0, tier: 3 }, football: { health: 3750, armor: 2000, tier: 4 },
     });
   });
 
