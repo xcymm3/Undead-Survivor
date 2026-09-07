@@ -8,6 +8,7 @@ export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, onMultip
   mode: GameMode; onMode: (mode: GameMode) => void; onStart: () => void; onLeaderboard: () => void; onMultiplayer: () => void; disabled: boolean;
 }) {
   return <div className="deployment-panel">
+    <h2 className="deployment-title">准备出发</h2>
     <div className="mode-options" role="group" aria-label="游戏模式">
       <button className="mode-option" aria-pressed={mode === 'practice'} onClick={() => onMode('practice')}>练习模式</button>
       <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}>正式模式</button>

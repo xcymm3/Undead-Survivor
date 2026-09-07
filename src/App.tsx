@@ -161,7 +161,6 @@ export function App() {
       </div>
       <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
       {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在加载武器…</div>}
-      <div className="menu-emblem" aria-hidden="true"><Icon name="tower" size={280} /></div>
     </section>}
 
     {(state.phase === 'playing' || state.phase === 'paused') && <div className="hud" aria-label="游戏状态">

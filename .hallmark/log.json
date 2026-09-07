@@ -1,6 +1,15 @@
 [
   {
     "date": "2026-09-07",
+    "scope": "homepage",
+    "macrostructure": "Photographic live game scene + right-side launcher",
+    "theme": "Bloom",
+    "nav": "left floating toolbar",
+    "footer": "none",
+    "brief": "按用户反馈恢复首页游戏画面与右侧选项，保留其他菜单"
+  },
+  {
+    "date": "2026-09-07",
     "scope": "app",
     "macrostructure": "Centered game launcher / Workbench",
     "theme": "Bloom",

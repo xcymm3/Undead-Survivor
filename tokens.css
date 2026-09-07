@@ -70,3 +70,11 @@
   --radius-pill: 999px;
   --text-bloom-display: clamp(64px, 8vw, 116px);
 }
+
+:root {
+  --color-menu-title: oklch(97% .018 80);
+  --color-menu-subtitle: oklch(88% .025 80);
+  --color-menu-shade: oklch(17% .023 160 / .78);
+  --color-menu-shade-soft: oklch(17% .023 160 / .14);
+  --color-menu-shadow: oklch(12% .023 160 / .32);
+}
