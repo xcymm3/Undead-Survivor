@@ -41,7 +41,7 @@ test('正式生存：固定入口、追击攻击扣血、暂停冻结、零血�
   expect(reset.health).toBe(100); expect(reset.player).toEqual({ x: 0, z: 9 });
   expect(reset.shots).toBe(0); expect(reset.breach).toBeNull();
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: '返回主菜单' }).click();
-  await page.reload(); await page.getByRole('button', { name: '查看排行榜' }).click();
+  await page.reload(); await page.getByRole('button', { name: '排行榜' }).click();
   await expect(page.getByRole('row')).toHaveCount(2);
   expect(errors).toEqual([]);
 });

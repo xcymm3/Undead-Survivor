@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-09-07",
+    "scope": "app",
+    "macrostructure": "Centered game launcher / Workbench",
+    "theme": "Bloom",
+    "theme_axes": "light / display-condensed / terracotta",
+    "nav": "N5 floating pill",
+    "footer": "none (functional game UI)",
+    "enrichment": "warm bloom and station emblem",
+    "brief": "主界面、设置、多人大厅和房间重设计；精简说明"
+  },
+  {
     "date": "2026-09-03",
     "macrostructure": "Photographic (live game canvas)",
     "theme": "custom",

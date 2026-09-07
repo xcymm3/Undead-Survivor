@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-07",
+  "framework": "React 19 + Vite + Three.js",
+  "fonts": "Barlow Condensed + IBM Plex Mono; Bloom body Segoe UI / Microsoft YaHei",
+  "palette": "previous forest/amber; user requests Bloom warm cream/terracotta",
+  "motion": "CSS only; no animation library",
+  "spacing": "4px named scale",
+  "sources": [
+    "package.json",
+    "tokens.css",
+    "src/main.tsx",
+    "src/style.css"
+  ]
+}

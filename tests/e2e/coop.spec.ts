@@ -175,7 +175,7 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
 
 test('浏览器多人入口说明桌面版要求，并可返回单人首页', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '多人模式' }).click();
-  await expect(page.getByText('请在桌面版中使用 Steam 联机', { exact: false })).toBeVisible();
+  await expect(page.getByText('请在桌面版登录 Steam 后联机。', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '返回首页', exact: true }).click();
   await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
 });

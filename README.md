@@ -108,3 +108,11 @@ npm run test:e2e
 前六款枪械模型来自 [Quaternius Animated Guns Pack](https://quaternius.com/packs/animatedguns.html)，多人角色来自 [Quaternius Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html)，均采用 CC0 许可。消防斧、喷火枪、自动霰弹枪和重机枪由项目代码使用基础几何体构建。
 
 \n
+
+### 菜单与联机外观
+
+菜单采用 Hallmark Bloom 暖白与陶土色主题；声音、操控和画质集中在设置面板，按键及渲染诊断可展开查看。设计规则见 `design.md`。
+
+每位玩家在每局开场随机生成一套角色与配色，复活时沿用；不再提供角色选择或读取旧皮肤存档。Steam 房间和战斗名单使用队员客户端读取的 Steam 昵称，通过已有 P2P 通道绑定到真实发送者同步；数字 SteamID 仍用于识别成员，房间号仍可复制用于加入。
+
+界面取图：启动 `npm run dev -- --port 5178 --strictPort` 后运行 `node scripts/capture-bloom.mjs`。该脚本只截图，使用隐藏、静音浏览器；房间中的名字和人数为本地展示数据，不构成真实 Steam 联网验收。

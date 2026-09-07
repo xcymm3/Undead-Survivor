@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DIFFICULTIES, FIXED_DIFFICULTY, WAVES, ZOMBIE_TYPES } from '../game/config';
+import { DIFFICULTIES, ZOMBIE_TYPES } from '../game/config';
 import type { Difficulty, GameMode, GameSnapshot, RunResult } from '../game/config';
 import { formatDuration } from '../game/leaderboard';
 import type { PersonalRecord } from '../game/leaderboard';
@@ -8,17 +8,15 @@ export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, onMultip
   mode: GameMode; onMode: (mode: GameMode) => void; onStart: () => void; onLeaderboard: () => void; onMultiplayer: () => void; disabled: boolean;
 }) {
   return <div className="deployment-panel">
-    <span className="label">PREPARE YOUR WATCH</span><h2>选择你的防守</h2>
     <div className="mode-options" role="group" aria-label="游戏模式">
-      <button className="mode-option" aria-pressed={mode === 'practice'} onClick={() => onMode('practice')}><span className="mode-radio" /><span>练习模式<small>静止僵尸靶 · 无限练习</small></span><b>01</b></button>
-      <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}><span className="mode-radio" /><span>正式模式<small>固定波次 · 数量与移速递增</small></span><b>02</b></button>
+      <button className="mode-option" aria-pressed={mode === 'practice'} onClick={() => onMode('practice')}>练习模式</button>
+      <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}>正式模式</button>
     </div>
     <div className="deployment-detail">
-      {mode === 'survival' ? <><span className="practice-note">困难难度 · 四阶尸群</span><p>{DIFFICULTIES[FIXED_DIFFICULTY].description}。第 3 波加入小鬼与持盾者，第 5 波加入狂暴者与巨人，第 7 波加入橄榄球僵尸。<br /><strong>清完一波全员回满生命并休整 {WAVES.rest} 秒。</strong></p></> : <><span className="practice-note">先熟悉你的第一发子弹。</span><p>僵尸固定站位，击倒后自动复位。<br />靶子不攻击；落水仍会失败，不计入排行榜。</p></>}
+      <p>{mode === 'survival' ? '守住尸群，清波回血。落水即失败。' : '静止靶练习，不计分。落水即失败。'}</p>
     </div>
-    <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}<small>{mode === 'practice' ? 'ENTER THE RANGE' : 'HOLD THE LINE'}</small></span><span aria-hidden="true">→</span></button>
-    <button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>2～4 人生存 / STEAM P2P →</span></button>
-    <button className="leaderboard-link" onClick={onLeaderboard}>查看排行榜 <span>本机 TOP 10 ↗</span></button>
+    <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}</span><span aria-hidden="true">→</span></button>
+    <div className="menu-secondary"><button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>↗</span></button><button className="leaderboard-link" onClick={onLeaderboard}>排行榜 <span>↗</span></button></div>
   </div>;
 }
 

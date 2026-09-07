@@ -142,10 +142,10 @@ export function App() {
 
     {multiplayer && <MultiplayerPanel notice={error} close={() => setMultiplayer(false)} />}
     <header className="topbar" inert={state.phase === 'breaching'}>
-      <div className="brand"><span className="brand-mark"><Icon name="tower" size={27} /></span><div>UNDEAD SURVIVOR<small>灰松哨站 · PINE RIDGE</small></div></div>
+      <div className="brand"><span className="brand-mark"><Icon name="tower" size={27} /></span><div>UNDEAD SURVIVOR</div></div>
       {state.phase !== 'ready' && <div className="compass" aria-label="当前朝向"><div className="compass-ticks"><b>{['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round((((-state.yaw % 360) + 360) % 360) / 45) % 8]}</b><span>{Math.round(((-state.yaw % 360) + 360) % 360)}°</span></div><span className="compass-notch" /><small>北 / 东侧来袭</small></div>}
       <div className="top-actions">
-        <span className="build-label">SURVIVAL <b>ARSENAL</b></span>
+
         <button className="icon-button sound-button" onClick={() => game.current?.setSound(!state.sound)} aria-label={state.sound ? '关闭声音' : '开启声音'} title={state.sound ? '关闭声音 · M' : '开启声音 · M'}><Icon name={state.sound ? 'sound' : 'mute'} /></button>
         <button className="icon-button" onClick={toggleFullscreen} aria-label={fullscreen ? '退出全屏' : '进入全屏'} title="切换全屏"><Icon name="expand" /></button>
         <button className="icon-button" onClick={openSettings} aria-label="游戏设置" title="游戏设置"><Icon name="settings" /></button>
@@ -155,15 +155,13 @@ export function App() {
 
     {state.phase === 'ready' && <section className="intro mode-menu" aria-labelledby="game-title">
       <div className="intro-copy">
-        <div className="field-tag"><span /> 灰松哨站 / 尸群正在逼近</div>
-        <h1 id="game-title">UNDEAD<br /><span>SURVIVOR</span><b>.</b></h1>
-        <p className="intro-line">在封锁区移动，活到最后。</p>
-        <p className="intro-description">森林边缘有了动静。<br />跨过河流，守住一波又一波尸群。</p>
-        <div className="intro-controls"><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> 开火</span><span><kbd>右键</kbd> 瞄准 / 开镜</span><span><kbd>R</kbd> 换弹</span><span><kbd>1–0 / 滚轮</kbd> 切枪</span></div>
+        <p className="menu-location">灰松哨站</p>
+        <h1 id="game-title">UNDEAD<br /><span>SURVIVOR</span></h1>
+        <p className="intro-line">活到下一波。</p>
       </div>
       <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
-      {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在准备十款武器…</div>}
-      <div className="intro-foot"><span className="signal-dot" /> 自由移动 · 僵尸生存 <span className="intro-foot-right">有限场地 / LOW-POLY WORLD</span></div>
+      {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在加载武器…</div>}
+      <div className="menu-emblem" aria-hidden="true"><Icon name="tower" size={280} /></div>
     </section>}
 
     {(state.phase === 'playing' || state.phase === 'paused') && <div className="hud" aria-label="游戏状态">
@@ -179,7 +177,7 @@ export function App() {
       <footer className="play-footer"><div><span className="signal-dot" /><span>{state.fps} FPS</span><span className="footer-divider" /><span>自由视角 · 44 × 62 m</span></div><div><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>鼠标</kbd> 转向</span><span><kbd>左键</kbd> {weapon.kind === 'melee' ? '挥砍' : weapon.automatic ? '按住连发' : '单次射击'}</span><span><kbd>右键</kbd> {sight.label}</span><span><kbd>ESC</kbd> 暂停</span></div></footer>
     </div>}
 
-    {state.phase === 'paused' && !settings && !state.coop && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><span className="label">WATCH ON HOLD</span><h2>哨站已暂停</h2><p>准备好后，继续移动与战斗。{state.mode === 'survival' && '坚守计时已暂停。'}</p><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button><small>按 ESC 继续</small></div></section>}
+    {state.phase === 'paused' && !settings && !state.coop && <section className="pause-screen" aria-label="暂停菜单"><div className="pause-content"><Icon name="tower" size={36} /><h2>哨站已暂停</h2><button className="start-button" onClick={() => game.current?.start()}>继续游戏 <Icon name="arrow" /></button><button className="text-button" onClick={() => { setFeedback(null); game.current?.reset(); }}>{state.mode === 'practice' ? '重新开始训练' : '重新开始坚守'}</button><button className="text-button" onClick={() => { setFeedback(null); game.current?.menu(); }}>返回主菜单</button></div></section>}
 
     {state.coop && state.phase !== 'failed' && <aside className="coop-team" aria-label="联机小队">
       <span className="label">{state.coop.players.length} 人协作 · {state.coop.host ? '房主' : '队员'}</span>
@@ -190,12 +188,12 @@ export function App() {
     </aside>}
     {state.coop?.spectating && state.phase === 'playing' && <div className="coop-spectating" role="status"><strong>你已阵亡 · 正在观战 {state.coop.players.find(player => player.id === state.coop?.spectatingId)?.name ?? '队友'}</strong><span>点击鼠标左键切换存活队友；清完本波后全员复活。</span></div>}
     {state.coop && state.phase === 'paused' && !settings && <section className="pause-screen" aria-label="联机菜单"><div className="pause-content">
-      <span className="label">TEAM STILL IN ACTION</span><h2>联机对局仍在继续</h2><p>打开菜单不会暂停尸群，存活玩家仍会受到攻击。</p>
+      <h2>联机对局仍在继续</h2><p>打开菜单不会暂停尸群，存活玩家仍会受到攻击。</p>
       <button className="start-button" onClick={() => game.current?.start()}>返回{state.coop.spectating ? '观战' : '战斗'} <Icon name="arrow" /></button>
       <button className="text-button" onClick={leaveCoop}>离开对局</button>
     </div></section>}
     {state.coop && state.phase === 'failed' && state.result && <section className="pause-screen" aria-label="多人结算"><div className="pause-content">
-      <span className="label">SQUAD ELIMINATED</span><h2>小队全员阵亡</h2><p>共同守住 <strong>{state.result.waves}</strong> 波 · 击杀 <strong>{state.result.kills}</strong> 只</p>
+      <h2>小队全员阵亡</h2><p>共同守住 <strong>{state.result.waves}</strong> 波 · 击杀 <strong>{state.result.kills}</strong> 只</p>
       <p>坚守 {formatDuration(state.result.duration)} · 多人成绩不计入单人排行榜</p>
       <button className="start-button" onClick={leaveCoop}>返回多人大厅 <Icon name="arrow" /></button>
     </div></section>}
@@ -203,33 +201,33 @@ export function App() {
     {state.phase === 'failed' && state.result && !state.coop && <ResultPanel result={state.result} entries={entries} saved={saved} record={state.mode === 'survival' ? record : null} breach={state.breach} onRetry={() => game.current?.reset()} onMenu={() => game.current?.menu()} />}
 
     <dialog ref={scoreDialog} className="settings-dialog leaderboard-dialog" aria-labelledby="leaderboard-title" onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}>
-      <div className="dialog-heading"><div><span className="label">LOCAL RECORDS</span><h2 id="leaderboard-title">波次排行榜</h2></div><button className="icon-button" onClick={() => scoreDialog.current?.close()} aria-label="关闭排行榜"><Icon name="close" /></button></div>
-      <p className="settings-intro">困难难度 · 本机前 10 名</p><LeaderboardTable entries={entries} difficulty={FIXED_DIFFICULTY} /><p className="board-footnote">按已清完的波数排名，未清完的一波不计入。<br />成绩保存在当前浏览器，清除网站数据会移除纪录。</p>
+      <div className="dialog-heading"><div><h2 id="leaderboard-title">波次排行榜</h2></div><button className="icon-button" onClick={() => scoreDialog.current?.close()} aria-label="关闭排行榜"><Icon name="close" /></button></div>
+      <p className="settings-intro">困难难度 · 本机前 10 名</p><LeaderboardTable entries={entries} difficulty={FIXED_DIFFICULTY} /><p className="board-footnote">仅保存本机成绩。</p>
     </dialog>
 
     <dialog ref={dialog} className="settings-dialog graphics-settings-dialog" aria-labelledby="settings-title" onCancel={event => { event.preventDefault(); event.stopPropagation(); closeSettings(); }} onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}>
-      <div className="dialog-heading"><div><span className="label">FIELD PREFERENCES</span><h2 id="settings-title">哨站设置</h2></div><button className="icon-button" onClick={closeSettings} aria-label="关闭设置"><Icon name="close" /></button></div>
-      <p className="settings-intro">鼠标控制自由视角，准星保持在屏幕中心。</p>
-      <div className="view-limits"><Icon name="aim" /><p>水平 360°<span>垂直 ±85°</span><small>WASD 移动，空格跳跃。点击捕获鼠标，ESC 暂停。</small></p></div>
-      <label className="toggle-row"><span>游戏声音<small>射击、护甲、死亡与低音量背景音乐</small></span><input type="checkbox" checked={state.sound} onChange={event => game.current?.setSound(event.target.checked)} /><i /></label>
-      <div className="volume-control"><label htmlFor="volume">总音量 <b>{Math.round(state.volume * 100)}%{!state.sound && ' · 已静音'}</b></label><input id="volume" type="range" min="0" max="100" step="1" value={Math.round(state.volume * 100)} onChange={event => game.current?.setVolume(Number(event.target.value) / 100)} /><small>自动保存音量与静音设置</small></div>
-      <div className="sensitivity-control"><div className="sensitivity-heading"><label htmlFor="sensitivity-range">鼠标灵敏度</label><div><input aria-label="鼠标灵敏度数值" type="number" min="10" max="200" step="1" value={sensitivityInput} onChange={event => { const value = event.target.value; setSensitivityInput(value); const number = Number(value); if (value.trim() && Number.isFinite(number) && number >= 10 && number <= 200) game.current?.setSensitivity(number); }} onBlur={commitSensitivityInput} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /><span>%</span></div></div><input id="sensitivity-range" aria-label="鼠标灵敏度滑块" type="range" min="10" max="200" step="1" value={state.sensitivity} onChange={event => game.current?.setSensitivity(event.target.valueAsNumber)} /><small>10%～200%，可拖动或输入数值，自动保存在本机</small></div>
-      <section className="graphics-panel" aria-labelledby="graphics-title">
-        <div className="graphics-heading"><div><span className="label">GRAPHICS QUALITY</span><h3 id="graphics-title">画质设置</h3></div><output>当前：{state.graphicsPreset === 'custom' ? '自定义' : graphicsPresets.find(item => item.id === state.graphicsPreset)?.label}</output></div>
+      <div className="dialog-heading"><div><h2 id="settings-title">哨站设置</h2></div><button className="icon-button" onClick={closeSettings} aria-label="关闭设置"><Icon name="close" /></button></div>
+      <div className="settings-layout"><section className="settings-basic" aria-labelledby="controls-title"><h3 id="controls-title">声音与操控</h3>
+      <label className="toggle-row"><span>游戏声音</span><input type="checkbox" checked={state.sound} onChange={event => game.current?.setSound(event.target.checked)} /><i /></label>
+      <div className="volume-control"><label htmlFor="volume">总音量 <b>{Math.round(state.volume * 100)}%{!state.sound && ' · 已静音'}</b></label><input id="volume" type="range" min="0" max="100" step="1" value={Math.round(state.volume * 100)} onChange={event => game.current?.setVolume(Number(event.target.value) / 100)} /></div>
+      <div className="sensitivity-control"><div className="sensitivity-heading"><label htmlFor="sensitivity-range">鼠标灵敏度</label><div><input aria-label="鼠标灵敏度数值" type="number" min="10" max="200" step="1" value={sensitivityInput} onChange={event => { const value = event.target.value; setSensitivityInput(value); const number = Number(value); if (value.trim() && Number.isFinite(number) && number >= 10 && number <= 200) game.current?.setSensitivity(number); }} onBlur={commitSensitivityInput} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /><span>%</span></div></div><input id="sensitivity-range" aria-label="鼠标灵敏度滑块" type="range" min="10" max="200" step="1" value={state.sensitivity} onChange={event => game.current?.setSensitivity(event.target.valueAsNumber)} /></div>
+      </section><section className="graphics-panel" aria-labelledby="graphics-title">
+        <div className="graphics-heading"><div><h3 id="graphics-title">画质设置</h3></div><output>当前：{state.graphicsPreset === 'custom' ? '自定义' : graphicsPresets.find(item => item.id === state.graphicsPreset)?.label}</output></div>
         <div className="quality-presets" role="group" aria-label="画质预设">{graphicsPresets.map(preset => <button key={preset.id} type="button" aria-pressed={state.graphicsPreset === preset.id} onClick={() => game.current?.applyGraphicsPreset(preset.id)}>{preset.label}</button>)}</div>
-        <div className="render-status"><span>实际渲染 <b>{state.renderResolution.width} × {state.renderResolution.height}</b></span><span><b>{state.fps}</b> FPS</span><small>GPU：{state.renderResolution.gpu}{/SwiftShader|llvmpipe|software/i.test(state.renderResolution.gpu) && <strong>检测到软件渲染，请开启显卡硬件加速。</strong>}</small></div>
+
         <div className="graphics-grid">
-          <label><span>渲染比例<small>相对屏幕原生像素</small></span><select aria-label="渲染比例" value={state.graphics.resolutionScale} onChange={event => game.current?.setGraphicsOption('resolutionScale', Number(event.target.value) as ResolutionScale)}><option value="0.5">50%</option><option value="0.67">67%</option><option value="0.75">75%</option><option value="1">100% 原生</option></select></label>
-          <label><span>抗锯齿<small>平滑物体边缘</small></span><select aria-label="抗锯齿" value={state.graphics.antiAliasing} onChange={event => game.current?.setGraphicsOption('antiAliasing', event.target.value as AntiAliasing)}><option value="off">关闭</option><option value="fxaa">FXAA · 快速</option><option value="smaa">SMAA · 精细</option></select></label>
-          <label><span>阴影质量<small>精度与更新速度</small></span><select aria-label="阴影质量" value={state.graphics.shadows} onChange={event => game.current?.setGraphicsOption('shadows', event.target.value as ShadowQuality)}><option value="off">关闭</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="ultra">极高</option></select></label>
-          <label><span>特效质量<small>血液与命中粒子数量</small></span><select aria-label="特效质量" value={state.graphics.effects} onChange={event => game.current?.setGraphicsOption('effects', event.target.value as EffectsQuality)}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
-          <label><span>视距<small>远景与雾效范围</small></span><select aria-label="视距" value={state.graphics.viewDistance} onChange={event => game.current?.setGraphicsOption('viewDistance', event.target.value as ViewDistance)}><option value="near">近</option><option value="medium">中</option><option value="far">远</option></select></label>
-          <label><span>帧率上限<small>高帧率需要高刷新率屏幕</small></span><select aria-label="帧率上限" value={state.graphics.frameLimit} onChange={event => game.current?.setGraphicsOption('frameLimit', Number(event.target.value) as FrameLimit)}><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="0">不限</option></select></label>
+          <label><span>渲染比例</span><select aria-label="渲染比例" value={state.graphics.resolutionScale} onChange={event => game.current?.setGraphicsOption('resolutionScale', Number(event.target.value) as ResolutionScale)}><option value="0.5">50%</option><option value="0.67">67%</option><option value="0.75">75%</option><option value="1">100% 原生</option></select></label>
+          <label><span>抗锯齿</span><select aria-label="抗锯齿" value={state.graphics.antiAliasing} onChange={event => game.current?.setGraphicsOption('antiAliasing', event.target.value as AntiAliasing)}><option value="off">关闭</option><option value="fxaa">FXAA · 快速</option><option value="smaa">SMAA · 精细</option></select></label>
+          <label><span>阴影质量</span><select aria-label="阴影质量" value={state.graphics.shadows} onChange={event => game.current?.setGraphicsOption('shadows', event.target.value as ShadowQuality)}><option value="off">关闭</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="ultra">极高</option></select></label>
+          <label><span>特效质量</span><select aria-label="特效质量" value={state.graphics.effects} onChange={event => game.current?.setGraphicsOption('effects', event.target.value as EffectsQuality)}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+          <label><span>视距</span><select aria-label="视距" value={state.graphics.viewDistance} onChange={event => game.current?.setGraphicsOption('viewDistance', event.target.value as ViewDistance)}><option value="near">近</option><option value="medium">中</option><option value="far">远</option></select></label>
+          <label><span>帧率上限</span><select aria-label="帧率上限" value={state.graphics.frameLimit} onChange={event => game.current?.setGraphicsOption('frameLimit', Number(event.target.value) as FrameLimit)}><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="0">不限</option></select></label>
         </div>
-        <label className="toggle-row pixel-toggle"><span>粗颗粒像素<small>额外降低内部清晰度并使用硬边放大</small></span><input type="checkbox" checked={state.graphics.pixelated} onChange={event => game.current?.setPixelated(event.target.checked)} /><i /></label>
+        <label className="toggle-row pixel-toggle"><span>粗颗粒像素</span><input type="checkbox" checked={state.graphics.pixelated} onChange={event => game.current?.setPixelated(event.target.checked)} /><i /></label>
       </section>
-      <div className="settings-controls"><span><kbd>左键</kbd> 射击</span><span><kbd>R</kbd> 换弹</span><span><kbd>M</kbd> 静音</span><span><kbd>ESC</kbd> 暂停</span></div>
-      <button className="start-button dialog-done" onClick={closeSettings}>返回哨站 <Icon name="arrow" /></button>
+      </div>
+      <details className="settings-help"><summary>操作按键与渲染信息</summary>        <div className="render-status"><span>实际渲染 <b>{state.renderResolution.width} × {state.renderResolution.height}</b></span><span><b>{state.fps}</b> FPS</span><small>GPU：{state.renderResolution.gpu}{/SwiftShader|llvmpipe|software/i.test(state.renderResolution.gpu) && <strong>检测到软件渲染，请开启显卡硬件加速。</strong>}</small></div><div className="settings-controls"><span><kbd>WASD</kbd> 移动</span><span><kbd>空格</kbd> 跳跃</span><span><kbd>右键</kbd> 瞄准</span><span><kbd>左键</kbd> 射击</span><span><kbd>R</kbd> 换弹</span><span><kbd>M</kbd> 静音</span><span><kbd>ESC</kbd> 暂停</span></div>
+      </details><button className="start-button dialog-done" onClick={closeSettings}>返回哨站 <Icon name="arrow" /></button>
     </dialog>
 
     {error && !multiplayer && <div className="error-notice" role="alert"><p>{error}</p><button className="text-button" onClick={() => setError('')}>关闭提示</button><button className="text-button" onClick={() => location.reload()}>重新加载</button></div>}

@@ -40,3 +40,33 @@
   --rule-width: 1px;
   --radius-sm: 2px;
 }
+
+/* Bloom 菜单系统；战斗 HUD 保留深色可读性。 */
+:root {
+  --color-bloom-paper: oklch(97% .016 75);
+  --color-bloom-panel: oklch(99% .009 75);
+  --color-bloom-raised: oklch(94% .021 70);
+  --color-bloom-ink: oklch(28% .026 43);
+  --color-bloom-muted: oklch(49% .026 48);
+  --color-bloom-dim: oklch(57% .029 48);
+  --color-bloom-accent: oklch(51% .132 38);
+  --color-bloom-hover: oklch(45% .13 38);
+  --color-bloom-rule: oklch(85% .023 65);
+  --color-bloom-faint: oklch(91% .04 55);
+  --color-bloom-glow: oklch(82% .091 47 / .65);
+  --color-bloom-halo: oklch(92% .04 55 / .5);
+  --color-bloom-shadow: oklch(34% .025 40 / .12);
+  --color-bloom-overlay: oklch(32% .03 43 / .32);
+  --color-bloom-glass: oklch(99% .009 75 / .86);
+  --color-bloom-clear: oklch(97% .016 75 / 0);
+  --color-bloom-signal: oklch(46% .075 147);
+  --color-bloom-seat: oklch(76% .059 48);
+  --color-bloom-seat-alt: oklch(68% .035 60);
+  --font-bloom-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --font-bloom-display: 'Barlow Condensed', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Microsoft YaHei', monospace;
+  --radius-panel: 28px;
+  --radius-control: 12px;
+  --radius-pill: 999px;
+  --text-bloom-display: clamp(64px, 8vw, 116px);
+}

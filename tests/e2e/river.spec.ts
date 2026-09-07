@@ -125,7 +125,7 @@ test('完整清波后休整、升波增加配额与移速，落水按守住波�
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), LEADERBOARD_KEY);
   expect(saved[0].waves).toBe(1); expect(saved[0].wave).toBe(2); expect(saved[0].cause).toBe('water');
   await page.screenshot({ path: 'test-results/waves-result.png' });
-  await page.reload(); await page.getByRole('button', { name: '查看排行榜' }).click();
+  await page.reload(); await page.getByRole('button', { name: '排行榜' }).click();
   await expect(page.getByRole('columnheader', { name: '守住波数' })).toBeVisible();
   await expect(page.getByRole('table')).toContainText('1 波');
 });
