@@ -24,6 +24,24 @@ try {
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.__undeadTower), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.steamCoop?.status), 'function');
+  // 在桌面协议和真实 CSP 下读取角色内嵌数据，避免仅浏览器测试通过却在 EXE 中退回占位模型。
+  const characters = ['Soldier_Male', 'Soldier_Female', 'Casual_Male', 'Casual_Female', 'Worker_Male', 'Worker_Female'];
+  for (const character of characters) {
+    const buffers = await page.evaluate(async name => {
+      const response = await fetch(`/models/characters/${name}.gltf`);
+      if (!response.ok) throw Error(`角色文件读取失败：${name}`);
+      const asset = await response.json();
+      const results = [];
+      for (const buffer of asset.buffers) {
+        const loaded = await fetch(buffer.uri);
+        if (!loaded.ok) throw Error(`角色缓冲区读取失败：${name}`);
+        results.push({ actual: (await loaded.arrayBuffer()).byteLength, expected: buffer.byteLength });
+      }
+      return results;
+    }, character);
+    assert.ok(buffers.length > 0);
+    for (const buffer of buffers) { assert.ok(buffer.actual > 0); assert.equal(buffer.actual, buffer.expected); }
+  }
   // 在隐藏页面中触发 DOM 操作，不发送会激活窗口的系统鼠标输入。
   await page.getByRole('button', { name: '多人模式' }).evaluate(button => button.click());
   const status = await page.evaluate(() => window.steamCoop.status());

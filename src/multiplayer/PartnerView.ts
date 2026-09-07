@@ -14,7 +14,10 @@ function loadCharacter(character: CharacterId) {
   let asset = assets.get(character);
   if (!asset) {
     const preset = CHARACTER_PRESETS.find(item => item.id === character)!;
-    asset = loader.loadAsync(`${import.meta.env.BASE_URL}models/characters/${preset.file}`);
+    asset = loader.loadAsync(`${import.meta.env.BASE_URL}models/characters/${preset.file}`).catch(error => {
+      assets.delete(character);
+      throw error;
+    });
     assets.set(character, asset);
   }
   return asset;
@@ -30,6 +33,7 @@ export class PartnerView extends THREE.Group {
   private flashUntil = 0;
   private appearanceKey = '';
   private loadGeneration = 0;
+  private retryAppearanceAt = 0;
   private mixer: THREE.AnimationMixer | null = null;
   private actions = new Map<string, THREE.AnimationAction>();
   private action = '';
@@ -51,7 +55,7 @@ export class PartnerView extends THREE.Group {
 
   private ensureAppearance(value: PlayerAppearance) {
     const appearance = normalizeAppearance(value), key = `${appearance.character}:${appearance.primary}:${appearance.accent}`;
-    if (this.appearanceKey === key) return;
+    if (this.appearanceKey === key || performance.now() < this.retryAppearanceAt) return;
     this.appearanceKey = key; const generation = ++this.loadGeneration;
     void loadCharacter(appearance.character).then(asset => {
       if (this.disposed || generation !== this.loadGeneration) return;
@@ -77,7 +81,12 @@ export class PartnerView extends THREE.Group {
       this.mixer = new THREE.AnimationMixer(model); this.actions.clear();
       for (const clip of asset.animations) this.actions.set(clip.name, this.mixer.clipAction(clip));
       this.action = ''; this.play('Idle');
-    }).catch(() => { if (generation === this.loadGeneration) this.fallback.visible = true; });
+    }).catch(error => {
+      if (this.disposed || generation !== this.loadGeneration) return;
+      this.fallback.visible = !this.model;
+      this.appearanceKey = ''; this.retryAppearanceAt = performance.now() + 3000;
+      console.warn(`角色模型加载失败，将重试：${appearance.character}`, error);
+    });
   }
 
   private play(name: string) {

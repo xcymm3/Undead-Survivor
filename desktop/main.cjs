@@ -54,7 +54,8 @@ if (!app.requestSingleInstanceLock({ silent })) {
     Menu.setApplicationMenu(null);
     const root = path.join(app.getAppPath(), 'dist');
     const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2' };
-    const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+    // glTF 角色把网格与骨骼缓冲区内嵌为 data:，GLTFLoader 通过 fetch 读取。
+    const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
     // 仅提供包内静态资源，不启动 HTTP 服务，也不向页面暴露 Node 或文件系统接口。
     protocol.handle('undead', request => {
       try {
