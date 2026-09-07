@@ -120,20 +120,26 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
     if (animated) moving.push(mesh); return mesh;
   };
   if (definition.id === 'axe') {
-    const handle = part('FiberglassHandle', [.065, .07, .92], [.12, -.10, -.36], 0xb93d2e);
-    handle.rotation.x = -.10;
-    part('Grip', [.082, .088, .34], [.12, -.13, .01], 0x292f30);
-    part('HeadSocket', [.20, .16, .15], [.12, .015, -.80], 0x515b5d);
-    const bladeShape = new THREE.Shape();
-    bladeShape.moveTo(.04, .13); bladeShape.lineTo(-.22, .16); bladeShape.lineTo(-.43, .07);
-    bladeShape.lineTo(-.46, -.13); bladeShape.lineTo(-.19, -.16); bladeShape.lineTo(.04, -.08); bladeShape.closePath();
-    const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(bladeShape, { depth: .075, bevelEnabled: false }),
-      new THREE.MeshStandardMaterial({ color: 0xaeb9b6, roughness: .48, metalness: .42, flatShading: true }));
-    blade.geometry.translate(0, 0, -.0375); blade.position.set(.04, .02, -.84); blade.name = 'FireAxeBlade'; model.add(blade);
-    const pick = new THREE.Mesh(new THREE.ConeGeometry(.075, .42, 4),
-      new THREE.MeshStandardMaterial({ color: 0x7c8988, roughness: .52, metalness: .36, flatShading: true }));
-    pick.name = 'FireAxePick'; pick.rotation.z = -Math.PI / 2; pick.position.set(.34, .02, -.82); model.add(pick);
-    part('SafetyCollar', [.11, .09, .10], [.12, -.01, -.69], 0xd3a629);
+    // 斧柄沿 Y 轴穿入斧眼，斧刃与尖背处于同一个 XY 平面；握持点即动画支点。
+    const profile = (name: string, points: [number, number][], depth: number, color: number) => {
+      const shape = new THREE.Shape(); points.forEach(([x, y], i) => i ? shape.lineTo(x, y) : shape.moveTo(x, y)); shape.closePath();
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }); geometry.translate(0, 0, -depth / 2);
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: .48, metalness: .4, flatShading: true }));
+      mesh.name = name; model.add(mesh); return mesh;
+    };
+    profile('FiberglassHandle', [[-.045, -.28], [.045, -.28], [.032, .63], [-.025, .65], [-.032, .05]], .055, 0xd4a645);
+    part('RubberGrip', [.085, .31, .072], [0, -.13, 0], 0x283234);
+    for (let i = 0; i < 7; i++) part(`GripRib${i}`, [.092, .012, .079], [0, -.255 + i * .043, 0], 0x465052);
+    part('GripPommel', [.105, .038, .085], [0, -.295, 0], 0x20292c);
+    part('NeckGuard', [.087, .19, .082], [0, .44, 0], 0x353f42);
+    profile('FireAxeHead', [[.07, .68], [-.12, .70], [-.30, .77], [-.40, .75], [-.45, .64], [-.44, .48], [-.37, .41], [-.22, .49], [-.10, .56], [.07, .55]], .105, 0xbc352a);
+    profile('FireAxeBlade', [[-.40, .75], [-.46, .73], [-.51, .63], [-.50, .47], [-.43, .38], [-.37, .41], [-.44, .48], [-.45, .64]], .032, 0xd7dfe0);
+    profile('FireAxePick', [[.055, .68], [.22, .65], [.40, .52], [.24, .57], [.055, .56]], .073, 0xaf3027);
+    profile('PickTip', [[.29, .60], [.40, .52], [.30, .555], [.25, .58]], .032, 0xc5cdcf);
+    part('HeadSocket', [.10, .17, .12], [0, .615, 0], 0x933027);
+    part('HandleWedge', [.05, .012, .078], [0, .707, 0], 0x707c80);
+    // 待机斜立于右侧，同时露出斧头侧面与厚度。
+    model.position.set(.08, -.10, -.46); model.rotation.set(-.12, -.32, -.24);
   } else if (definition.id === 'flamethrower') {
     part('Body', [.32, .24, .55], [.05, -.04, -.28], 0x3b4b45);
     tube('Nozzle', .055, .62, [.04, .03, -.70], 0x596967, true);
@@ -182,19 +188,20 @@ export function prepareProceduralWeapon(definition: WeaponDefinition) {
     const p = THREE.MathUtils.clamp(progress, 0, 1), pulse = Math.sin(Math.PI * p);
     if (kind === 'fire') {
       if (definition.id === 'axe') {
-        const windup = new THREE.Euler(.32, -.28, -.48), chop = new THREE.Euler(-1.28, .18, .72);
-        if (p < .22) {
-          const t = smooth(p / .22); model.rotation.set(windup.x * t, windup.y * t, windup.z * t);
-          model.position.set(.07 * t, .02 * t, .08 * t);
-        } else if (p < .58) {
-          const t = smooth((p - .22) / .36);
-          model.rotation.set(THREE.MathUtils.lerp(windup.x, chop.x, t), THREE.MathUtils.lerp(windup.y, chop.y, t), THREE.MathUtils.lerp(windup.z, chop.z, t));
-          model.position.set(THREE.MathUtils.lerp(.07, -.13, t), THREE.MathUtils.lerp(.02, -.17, t), THREE.MathUtils.lerp(.08, -.14, t));
-        } else {
-          const t = smooth((p - .58) / .42), recover = 1 - t;
-          model.rotation.set(chop.x * recover, chop.y * recover, chop.z * recover);
-          model.position.set(-.13 * recover, -.17 * recover, -.14 * recover);
-        }
+        // 刃口朝左：围绕握点沿屏幕平面斜劈，避免绕 X 轴把斧头翻成下砸。
+        const poses = [
+          { at: 0, position: [.08, -.10, -.46], rotation: [-.12, -.32, -.24] },
+          { at: .22, position: [.20, -.04, -.38], rotation: [-.08, -.22, -.70] },
+          { at: .52, position: [-.30, -.19, -.64], rotation: [-.18, .12, 1.12] },
+          { at: .66, position: [-.35, -.24, -.59], rotation: [-.16, .18, 1.38] },
+          { at: 1, position: [.08, -.10, -.46], rotation: [-.12, -.32, -.24] },
+        ];
+        const end = poses.findIndex((pose, i) => i > 0 && p <= pose.at), a = poses[end - 1], b = poses[end];
+        const t = smooth((p - a.at) / (b.at - a.at));
+        model.position.set(...a.position.map((value, i) => THREE.MathUtils.lerp(value, b.position[i], t)) as [number, number, number]);
+        const from = new THREE.Quaternion().setFromEuler(new THREE.Euler(...a.rotation as [number, number, number]));
+        const to = new THREE.Quaternion().setFromEuler(new THREE.Euler(...b.rotation as [number, number, number]));
+        model.quaternion.slerpQuaternions(from, to, t);
       }
       else {
         const bolt = model.getObjectByName(definition.id === 'auto-shotgun' ? 'Bolt' : definition.id === 'heavy-machine-gun' ? 'ChargingHandle' : 'Nozzle');
