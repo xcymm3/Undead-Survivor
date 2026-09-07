@@ -28,6 +28,9 @@ export class CoopSession {
   private worldTimer = 0;
   private worldReceivedAt = 0;
   private revived = false;
+  private selectedAppearance: PlayerAppearance;
+  private appearanceConfirmed = false;
+  private appearanceTimer = 0;
   private zombieTracks = new Map<number, { fromX: number; fromZ: number; fromHeading: number; toX: number; toZ: number; toHeading: number; elapsed: number; duration: number }>();
   lastPacketAt = performance.now();
   authoritativeKeys = new Set<string>();
@@ -36,6 +39,7 @@ export class CoopSession {
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
     private send: (data: unknown) => void, appearance: PlayerAppearance = defaultAppearance(match.members.findIndex(member => member.id === match.local))) {
     this.host = match.host === match.local;
+    this.selectedAppearance = normalizeAppearance(appearance);
     this.players = match.members.map((member, index) => ({ ...member, ...SPAWNS[index], height: 0, yaw: 0, pitch: 0,
       health: PLAYER.health, lastDamageAt: -1e6, weapon: 0, shots: 0, ammo: 30, reloading: false, reloadProgress: 1,
       reloadEmpty: false, appearance: member.id === match.local ? normalizeAppearance(appearance) : defaultAppearance(index) }));
@@ -61,11 +65,16 @@ export class CoopSession {
   }
 
   announceAppearance() {
-    if (!this.host) this.send({ type: 'appearance', seq: ++this.outgoing, appearance: this.local.appearance });
+    if (this.host) return;
+    this.selectedAppearance = normalizeAppearance(this.local.appearance);
+    this.appearanceConfirmed = false; this.appearanceTimer = 0;
+    this.send({ type: 'appearance', seq: ++this.outgoing, appearance: this.selectedAppearance });
   }
 
   sendInput(keys: Set<string>, yaw: number, pitch: number, jump: number, delta: number) {
     if (this.host) return;
+    this.appearanceTimer += delta;
+    if (!this.appearanceConfirmed && this.appearanceTimer >= 1) this.announceAppearance();
     this.inputTimer += delta;
     if (this.inputTimer < .05 && jump === this.localJump) return;
     this.localJump = jump; this.inputTimer = 0;
@@ -103,7 +112,17 @@ export class CoopSession {
     if (!validWorld(data, this.match.members) || data.seq <= this.worldSeq) return;
     this.worldSeq = data.seq; this.lastPacketAt = performance.now();
     const wasDead = this.local.health === 0;
-    for (const player of data.players) Object.assign(this.players.find(value => value.id === player.id)!, player);
+    for (const player of data.players) {
+      const pawn = this.players.find(value => value.id === player.id)!;
+      Object.assign(pawn, player);
+      if (player.id === this.match.local) {
+        const selected = this.selectedAppearance;
+        this.appearanceConfirmed = player.appearance.character === selected.character
+          && player.appearance.primary === selected.primary && player.appearance.accent === selected.accent;
+        // 开局默认快照不能覆盖本机选择，否则重发也只会发送默认外貌。
+        pawn.appearance = { ...selected };
+      }
+    }
     const input = data.inputs.find(value => value.id === this.local.id);
     this.authoritativeKeys = new Set(input?.keys ?? []);
     if (wasDead && this.local.health > 0) {

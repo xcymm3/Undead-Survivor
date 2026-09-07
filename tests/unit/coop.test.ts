@@ -16,7 +16,7 @@ function pair() {
   return { host, guest, a, b, packets };
 }
 describe('2～4 人房主权威模拟', () => {
-  it('只发送一次外貌选择并由房主纳入原有世界快照', () => {
+  it('外貌选择由房主纳入原有世界快照', () => {
     const { host, guest, packets } = pair();
     guest.local.appearance = { character: 'worker-female', primary: 4, accent: 2 };
     guest.announceAppearance();
@@ -24,6 +24,25 @@ describe('2～4 人房主权威模拟', () => {
     host.broadcast(0, true);
     const world = packets[0] as WorldState;
     expect(world.players.find(player => player.id === '222')?.appearance).toEqual(guest.local.appearance);
+  });
+
+  it('开局外貌包丢失后保留本机选择，重传直到房主快照确认', () => {
+    const { host, packets } = pair(), outgoing: unknown[] = [];
+    const encounter = new Encounter(); encounter.reset('survival', 'hard');
+    const selected = { character: 'worker-female' as const, primary: 4, accent: 2 };
+    const guest = new CoopSession({ ...match, local: '222' }, encounter, nav, data => outgoing.push(structuredClone(data)), selected);
+    guest.announceAppearance(); outgoing.length = 0; // 模拟首包在房主准备完成前丢失。
+    host.broadcast(0, true); guest.receive('111', packets[0]);
+    expect(guest.local.appearance).toEqual(selected);
+    guest.sendInput(new Set(), 0, 0, 0, .5);
+    expect(outgoing.filter(data => (data as { type: string }).type === 'appearance')).toHaveLength(0);
+    guest.sendInput(new Set(), 0, 0, 0, .5);
+    const retry = outgoing.filter(data => (data as { type: string }).type === 'appearance');
+    expect(retry).toHaveLength(1);
+    host.receive('222', retry[0]); expect(host.remote.appearance).toEqual(selected);
+    host.broadcast(0, true); guest.receive('111', packets[1]);
+    outgoing.length = 0; guest.sendInput(new Set(), 0, 0, 0, 2);
+    expect(outgoing.filter(data => (data as { type: string }).type === 'appearance')).toHaveLength(0);
   });
 
   it('只接受队友输入，拒绝伪造位置、非法数值、重复与倒序输入', () => {
