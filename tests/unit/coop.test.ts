@@ -96,10 +96,10 @@ describe('2～4 人房主权威模拟', () => {
     expect(validWorld({ ...first, players: [first.players[0], first.players[0]] }, members)).toBe(false);
     expect(validWorld({ ...first, intermission: -1 }, members)).toBe(false);
     expect(validWorld({ ...first, inputs: [{ id: '222', ack: 0, keys: ['Teleport'] }] }, members)).toBe(false);
-    const football = { id: 999, kind: 'football' as const, x: 0, z: -10, health: 3750, bodyHealth: 1750,
-      armorHealth: 2000, maxHealth: 3750, downTime: 0, bornAt: 0 };
+    const football = { id: 999, kind: 'football' as const, x: 0, z: -10, health: 4500, bodyHealth: 2500,
+      armorHealth: 2000, maxHealth: 4500, downTime: 0, bornAt: 0 };
     expect(validWorld({ ...first, zombies: [football] }, members)).toBe(true);
-    expect(validWorld({ ...first, zombies: [{ ...football, health: 3751, bodyHealth: 1751 }] }, members)).toBe(false);
+    expect(validWorld({ ...first, zombies: [{ ...football, health: 4501, bodyHealth: 2501 }] }, members)).toBe(false);
     const giant = { ...football, kind: 'giant', health: 4000, bodyHealth: 4000, armorHealth: 0, maxHealth: 4000 };
     expect(validWorld({ ...first, zombies: [giant] }, members)).toBe(true);
     expect(validWorld({ ...first, zombies: [{ ...giant, health: 4001, bodyHealth: 4001 }] }, members)).toBe(false);

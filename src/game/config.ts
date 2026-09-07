@@ -21,7 +21,7 @@ export const ZOMBIE_TYPES = {
   shield: { label: '持盾僵尸', health: 700, armor: 500, tier: 2 },
   berserker: { label: '狂暴僵尸', health: 1200, armor: 0, tier: 3 },
   giant: { label: '巨人僵尸', health: 4000, armor: 0, tier: 3 },
-  football: { label: '橄榄球僵尸', health: 3750, armor: 2000, tier: 4 },
+  football: { label: '橄榄球僵尸', health: 4500, armor: 2000, tier: 4 },
 } as const;
 export const ZOMBIE_KINDS = Object.keys(ZOMBIE_TYPES) as ZombieKind[];
 export const emptyZombieCounts = () => Object.fromEntries(ZOMBIE_KINDS.map(kind => [kind, 0])) as Record<ZombieKind, number>;
