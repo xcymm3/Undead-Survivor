@@ -66,6 +66,7 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && ['normal', 'cone', 'bucket', 'imp', 'shield', 'berserker', 'giant', 'football'].includes(z.kind)
       && finite(z.x, 22) && finite(z.z, 48) && finite(z.health, maximumZombieHealth) && z.health >= 0 && finite(z.armorHealth, maximumZombieArmor)
       && z.armorHealth >= 0 && finite(z.maxHealth, maximumZombieHealth) && z.maxHealth > 0 && finite(z.downTime, 10) && z.downTime >= 0 && finite(z.bornAt, 1e8)
+      && z.health <= z.maxHealth
       && (z.bodyHealth === undefined || finite(z.bodyHealth, maximumZombieBodyHealth) && z.bodyHealth >= 0)
       && (z.bodyHealth === undefined || Math.abs(z.bodyHealth + z.armorHealth - z.health) < 1e-6)
       && (z.attacking === undefined || typeof z.attacking === 'boolean')
