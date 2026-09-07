@@ -20,7 +20,7 @@ export const ZOMBIE_TYPES = {
   imp: { label: '小鬼僵尸', health: 300, armor: 0, tier: 2 },
   shield: { label: '持盾僵尸', health: 700, armor: 500, tier: 2 },
   berserker: { label: '狂暴僵尸', health: 1200, armor: 0, tier: 3 },
-  giant: { label: '巨人僵尸', health: 4000, armor: 0, tier: 3 },
+  giant: { label: '巨人僵尸', health: 6000, armor: 0, tier: 3 },
   football: { label: '橄榄球僵尸', health: 4500, armor: 2000, tier: 4 },
 } as const;
 export const ZOMBIE_KINDS = Object.keys(ZOMBIE_TYPES) as ZombieKind[];

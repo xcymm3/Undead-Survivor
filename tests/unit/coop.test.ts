@@ -104,9 +104,9 @@ describe('2～4 人房主权威模拟', () => {
       armorHealth: 2000, maxHealth: 4500, downTime: 0, bornAt: 0 };
     expect(validWorld({ ...first, zombies: [football] }, members)).toBe(true);
     expect(validWorld({ ...first, zombies: [{ ...football, health: 4501, bodyHealth: 2501 }] }, members)).toBe(false);
-    const giant = { ...football, kind: 'giant', health: 4000, bodyHealth: 4000, armorHealth: 0, maxHealth: 4000 };
+    const giant = { ...football, kind: 'giant', health: 6000, bodyHealth: 6000, armorHealth: 0, maxHealth: 6000 };
     expect(validWorld({ ...first, zombies: [giant] }, members)).toBe(true);
-    expect(validWorld({ ...first, zombies: [{ ...giant, health: 4001, bodyHealth: 4001 }] }, members)).toBe(false);
+    expect(validWorld({ ...first, zombies: [{ ...giant, health: 6001, bodyHealth: 6001 }] }, members)).toBe(false);
   });
   it('队员在快照之间连续插值僵尸位置与朝向', () => {
     const { guest, b } = pair();
