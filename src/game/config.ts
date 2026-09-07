@@ -31,8 +31,8 @@ export const ENEMY_RULES = {
   berserker: { health: 1200, speed: 1.35, rageAt: 600, ragePause: .30, rageSpeed: 2.6, speedCap: 5.8,
     windup: .25, duration: .85, rageWindup: .15, rageDuration: .55 },
   giant: { speed: .75, scale: 1.8, contactRadius: 1.8, separationRadius: 2.1, windup: .65, duration: 1.5, slamRadius: 2.4 },
-  football: { speed: 1.65, brokenSpeed: 1.35, speedCap: 4.5, scale: 1.1, contactRadius: 1.35, windup: .2, duration: .7,
-    chargeMin: 5, chargeMax: 16, chargeWindup: .35, chargeSpeed: 3.6, chargeSpeedCap: 8.5, chargeDuration: 1.9,
+  football: { speed: 1.25, brokenSpeed: 1.05, speedCap: 3.3, scale: 1.1, contactRadius: 1.35, windup: .2, duration: .7,
+    chargeMin: 5, chargeMax: 16, chargeWindup: .35, chargeSpeed: 4.2, chargeSpeedCap: 10, chargeDuration: 1.9,
     chargeCooldown: 3.2, obstacleStun: .9, missStun: .45, replanCooldown: .6 },
 } as const;
 export const zombieScale = (kind: ZombieKind) => kind === 'imp' ? ENEMY_RULES.imp.scale

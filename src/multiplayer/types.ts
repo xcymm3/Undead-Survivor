@@ -77,6 +77,8 @@ export function validWorld(v: unknown, members: Member[]): v is WorldState {
       && (z.specialState === undefined || ['ready', 'windup', 'charging', 'stunned'].includes(z.specialState))
       && (z.ragePause === undefined || finite(z.ragePause, 1) && z.ragePause >= 0)
       && (z.specialRemaining === undefined || finite(z.specialRemaining, 2) && z.specialRemaining >= 0)
+      && (z.chargeHeading === undefined || finite(z.chargeHeading, Math.PI))
+      && (z.chargeDistance === undefined || finite(z.chargeDistance, 16) && z.chargeDistance >= 0)
       && (z.specialCooldown === undefined || finite(z.specialCooldown, 5) && z.specialCooldown >= 0)
       && (z.heading === undefined || finite(z.heading, 1e6)) && (z.attackTime === undefined || finite(z.attackTime, 2) && z.attackTime >= 0));
 }

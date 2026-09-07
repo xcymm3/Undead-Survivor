@@ -78,7 +78,10 @@ export class CrowdMovement {
     const position = { x: zombie.x, z: zombie.z }, speed = zombieMoveSpeed(zombie, baseSpeed);
     if (step <= 0 || speed <= 0) return motion;
     const charging = zombie.kind === 'football' && zombie.specialState === 'charging';
-    const target = charging ? player : this.navigation ? this.navigation.waypoint(position) : player;
+    if (charging) zombie.chargeHeading ??= zombie.heading ?? Math.atan2(player.x - position.x, player.z - position.z);
+    const target = charging
+      ? { x: position.x + Math.sin(zombie.chargeHeading!), z: position.z + Math.cos(zombie.chargeHeading!) }
+      : this.navigation ? this.navigation.waypoint(position) : player;
     if (!target) return motion;
     const dx = target.x - position.x, dz = target.z - position.z;
     const distance = Math.hypot(dx, dz);
@@ -91,7 +94,7 @@ export class CrowdMovement {
       * Math.max(0, Math.min(1, remaining / CROWD.arrivalFade));
     const forward = Math.sqrt(Math.max(0, speed * speed - lateral * lateral));
     const leg = { start: position, vx: ux * forward + uz * lateral, vz: uz * forward - ux * lateral,
-      duration: distance > 0 ? Math.min(step, distance / speed) : step };
+      duration: charging ? step : distance > 0 ? Math.min(step, distance / speed) : step };
     const destination = { x: position.x + leg.vx * leg.duration, z: position.z + leg.vz * leg.duration };
     if (this.navigation && !this.navigation.clear(position, destination)) {
       if (charging) {

@@ -85,15 +85,15 @@ describe('八类僵尸数值与阶位名单', () => {
     } finally { field.dispose(); (field.material as { dispose(): void }).dispose(); }
   });
 
-  it('巨人始终保持0.75x移速，橄榄球常速为1.65x且破甲后为1.35x', () => {
+  it('巨人始终保持0.75x移速，橄榄球常速为1.25x且破甲后为1.05x', () => {
     const giant = actor('giant');
     expect(zombieMoveSpeed(giant, 2)).toBe(1.5);
     giant.health = 100; giant.bodyHealth = 100;
     expect(zombieMoveSpeed(giant, 2)).toBe(1.5);
     const football = actor('football');
-    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(3.3);
+    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(2.5);
     football.armorHealth = 0;
-    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(2.7);
+    expect(zombieMoveSpeed(football, 2)).toBeCloseTo(2.1);
   });
 });
 
@@ -113,7 +113,7 @@ describe('橄榄球冲锋和河道', () => {
     expect(Math.hypot(football.x - start.x, football.z - start.z)).toBeGreaterThan(.5);
   });
 
-  for (const phase of ['windup', 'charging'] as const) it(`玩家在${phase}期间跳到对岸时取消冲锋并重新寻路`, () => {
+  for (const phase of ['windup', 'charging'] as const) it(`玩家在${phase}期间横移到对岸时仍保持锁定方向`, () => {
     const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
     encounter.setNavigation(new Navigation([], true)); encounter.wave = 10;
     encounter.waveSpawned = encounter.pressure.count; encounter.waveQueue = [];
@@ -121,13 +121,15 @@ describe('橄榄球冲锋和河道', () => {
     const football = actor('football', 0, -10); encounter.zombies = [football];
     for (let i = 0; i < 20 && football.specialState !== phase; i++) encounter.update(.05, () => null);
     expect(football.specialState).toBe(phase);
-    encounter.player = { x: 0, z: -24 }; encounter.update(.05, () => null);
-    expect(football.specialState).toBe('ready');
-    expect(football.specialCooldown).toBeGreaterThan(0);
+    const heading = football.chargeHeading;
+    encounter.player = { x: 4, z: -24 }; encounter.update(.05, () => null);
+    expect(football.specialState).toBe(phase); expect(football.chargeHeading).toBe(heading);
+    encounter.update(.4, () => null);
+    expect(football.x).toBeCloseTo(0); expect(football.z).toBeGreaterThan(-10);
     expect(isWater(football)).toBe(false);
   });
 
-  it('桥上直线路径畅通时允许冲锋，高波次速度达到8.5米每秒', () => {
+  it('桥上直线路径畅通时允许冲锋，高波次速度达到10米每秒', () => {
     const encounter = new Encounter(() => 0); encounter.reset('survival', 'hard');
     encounter.setNavigation(new Navigation([], true)); encounter.wave = 10;
     encounter.waveSpawned = encounter.pressure.count; encounter.waveQueue = [];
@@ -135,7 +137,7 @@ describe('橄榄球冲锋和河道', () => {
     const football = actor('football', 10, riverCenter(10) + 5); encounter.zombies = [football];
     encounter.update(.05, () => null); expect(football.specialState).toBe('windup');
     football.specialState = 'charging';
-    expect(zombieMoveSpeed(football, encounter.pressure.speed)).toBe(8.5);
+    expect(zombieMoveSpeed(football, encounter.pressure.speed)).toBe(10);
   });
 
   it('第十波橄榄球完成蓄力和冲锋，命中只造成一次10点伤害', () => {

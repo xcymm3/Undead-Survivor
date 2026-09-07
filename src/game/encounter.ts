@@ -13,7 +13,7 @@ export interface Zombie extends SpawnPosition {
   id: number; kind: ZombieKind; health: number; bodyHealth?: number; maxHealth: number; armorHealth: number;
   downTime: number; bornAt: number; avoidance?: number; heading?: number; attacking?: boolean; attackTime?: number;
   attackTarget?: string; enraged?: boolean; ragePause?: number; specialState?: FootballState; specialRemaining?: number;
-  specialCooldown?: number;
+  specialCooldown?: number; chargeHeading?: number; chargeDistance?: number;
 }
 export const PRACTICE_POSITIONS: Position[] = [{ x: -5.8, z: -9.5 }, { x: 0.15, z: -22 }, { x: 5.4, z: -21 }, { x: -1, z: -31 }];
 
@@ -146,11 +146,18 @@ export class Encounter {
   private prepareSpecials(targets: Map<number, Pawn>) {
     for (const zombie of this.zombies) if (zombie.health > 0 && zombie.kind === 'football') {
       const target = targets.get(zombie.id) ?? this.player;
-      if ((zombie.specialState === 'windup' || zombie.specialState === 'charging') && !this.navigation?.clear(zombie, target)) {
+      // 蓄力时已经锁定瞄准点；玩家横移或切换追击目标不会让冲锋转弯。
+      const lockedTarget = zombie.chargeHeading !== undefined && zombie.chargeDistance !== undefined
+        ? { x: zombie.x + Math.sin(zombie.chargeHeading) * zombie.chargeDistance,
+          z: zombie.z + Math.cos(zombie.chargeHeading) * zombie.chargeDistance } : target;
+      if (zombie.specialState === 'windup' && !this.navigation?.clear(zombie, lockedTarget)) {
         this.cancelCharge(zombie);
         continue;
       }
       if (this.chargePossible(zombie, target)) {
+        zombie.chargeHeading = Math.atan2(target.x - zombie.x, target.z - zombie.z);
+        zombie.chargeDistance = Math.hypot(target.x - zombie.x, target.z - zombie.z);
+        zombie.heading = zombie.chargeHeading;
         zombie.specialState = 'windup'; zombie.specialRemaining = ENEMY_RULES.football.chargeWindup;
         zombie.attackTime = 0; zombie.attacking = false;
       }
