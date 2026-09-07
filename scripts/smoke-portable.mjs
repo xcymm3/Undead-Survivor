@@ -53,7 +53,7 @@ async function start() {
   await page.waitForURL('undead://game/');
   // GitHub 的全新 Windows runner 首次解压便携包并解析六套枪械模型明显慢于开发机。
   // 先用单人入口确认共享资源已经就绪，再验收多人入口，避免把冷启动误判成 Steam 故障。
-  await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled({ timeout: 90000 });
+  await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled({ timeout: 90000 });
   await expect(page.getByRole('button', { name: '多人模式' })).toBeEnabled();
   await assertHidden();
   assert.equal(await app.evaluate(({ app }) => app.isPackaged), true);
@@ -97,7 +97,7 @@ try {
   await click(page, '多人模式');
   const status = await page.evaluate(() => window.steamCoop.status());
   assert.equal(status.appId, 480);
-  if (!status.available) await expect(page.getByText('Steam 未就绪', { exact: false })).toBeVisible();
+  if (!status.available) await expect(page.getByText('Steam 未连接', { exact: false })).toBeVisible();
   const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true })).toPNG().toString('base64'));
   await writeFile(path.join(evidence, 'steam-status.png'), Buffer.from(png, 'base64'));
   await click(page, '返回首页');
@@ -111,7 +111,7 @@ try {
   await click(page, '返回哨站');
   await app.context().setOffline(true);
   await page.reload();
-  await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
   await stop();
   assert.ok((await stat(path.join(portableDir, 'Undead Survivor Data', 'Browser', 'Local Storage'))).isDirectory());
 

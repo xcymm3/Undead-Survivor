@@ -30,14 +30,13 @@ try {
   await installAudioCapture(page, audioPath);
   await page.goto(url);
   await page.waitForFunction(() => window.__undeadTower?.snapshot().weaponAnimation.loaded);
-  await page.getByRole('button', { name: '正式模式' }).click();
   await page.mouse.move(640, 360);
   capture = await startVideoCapture(page, silentPath, ffmpeg);
   captureInfo = { width: 1280, height: 720, fps: 30, video: 'H.264', audio: 'AAC', source: 'Chrome screencast + game master audio' };
   recordingStart = capture.startedAt;
   log('recording-start', null, captureInfo);
   await pause(1600);
-  await page.getByRole('button', { name: '开始坚守' }).click();
+  await page.getByRole('button', { name: '单人模式' }).click();
   const snapshot = () => page.evaluate(() => window.__undeadTower.snapshot());
   let state = await snapshot(); log('run-start', state);
   let stage = 0, stageStart = state.survived, stageShots = state.shots, reloadRequested = false, reloadSeen = false, reloadCompleteAt = null;

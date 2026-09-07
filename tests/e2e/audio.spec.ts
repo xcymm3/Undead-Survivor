@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('音量即时生效，静音独立保存，刷新与重开不丢失偏好', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '进入哨站' }).click();
+  await page.getByRole('button', { name: '练习模式' }).click();
   await expect.poll(async () => (await page.evaluate(() => window.__undeadTower!.snapshot())).audio.musicPlaying).toBe(true);
   // 在浏览器任务内同步开火和读取 0.3 秒瞬态，避免低帧率时跨进程点击返回得太晚。
   const shotAudio = await page.evaluate(() => {
@@ -35,7 +35,7 @@ test('音量即时生效，静音独立保存，刷新与重开不丢失偏好',
   await volume.fill('37');
   await page.screenshot({ path: 'test-results/audio-settings.png' });
   await page.getByRole('button', { name: '返回哨站' }).click();
-  await page.getByRole('button', { name: '进入哨站' }).click();
+  await page.getByRole('button', { name: '练习模式' }).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '重新开始训练' }).click();
   expect((await page.evaluate(() => window.__undeadTower!.snapshot())).audio.volume).toBe(0.37);

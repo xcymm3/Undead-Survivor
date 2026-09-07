@@ -46,11 +46,11 @@ try {
   await page.getByRole('button', { name: '多人模式' }).evaluate(button => button.click());
   const status = await page.evaluate(() => window.steamCoop.status());
   assert.equal(status.appId, 480);
-  if (!status.available) await expect(page.getByText('Steam 未就绪', { exact: false })).toBeVisible();
+  if (!status.available) await expect(page.getByText('Steam 未连接', { exact: false })).toBeVisible();
   const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true })).toPNG().toString('base64'));
   await writeFile(path.join(evidence, 'steam-status.png'), Buffer.from(png, 'base64'));
   await page.getByRole('button', { name: '返回首页', exact: true }).evaluate(button => button.click());
-  await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
   assert.deepEqual(errors, []);
   await assertHidden();
   console.log(JSON.stringify({ desktop: 'passed', silent: true, appId: status.appId, steamAvailable: status.available, note: '未执行双账号实际 Steam 联网验收', evidence }, null, 2));

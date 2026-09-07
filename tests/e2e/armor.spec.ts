@@ -5,14 +5,13 @@ import { WEAPONS } from '../../src/game/weapons';
 test('自由瞄准下护甲按当前武器伤害脱落并产生反馈', async ({ page }) => {
   test.setTimeout(60000);
   await page.goto('/');
-  await page.getByRole('button', { name: '正式模式' }).click();
   // 名单生成每只怪物消耗两次随机数：先锁定一阶，再固定生成路障。
   await page.evaluate(() => {
     const values = Array.from({ length: 18 }, (_, index) => index % 2 === 0 ? .1 : .7);
     let index = 0, seed = 17;
     Math.random = () => index < values.length ? values[index++] : ((seed = seed * 48271 % 2147483647) - 1) / 2147483646;
   });
-  await page.getByRole('button', { name: '开始坚守' }).click();
+  await page.getByRole('button', { name: '单人模式' }).click();
   await capture(page);
   await expect.poll(async () => (await snapshot(page)).targets.some(z => z.kind === 'cone'), { timeout: 20000 }).toBe(true);
   const releasedBefore = (await snapshot(page)).armorEffects.released;

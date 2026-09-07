@@ -70,7 +70,7 @@ for (const width of [320, 375, 414, 768]) {
   test(`小屏布局与设置可用 ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
-    await expect(page.getByRole('button', { name: '进入哨站' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '练习模式' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('button', { name: '游戏设置' }).click();
     await expect(page.getByRole('button', { name: '返回哨站' })).toBeVisible();
@@ -89,7 +89,7 @@ test('标题与暂停静止时停止绘制，游戏恢复后重新绘制', async
   const ready = (await snapshot(page)).renderCount;
   await page.waitForTimeout(250);
   expect((await snapshot(page)).renderCount).toBe(ready);
-  await page.getByRole('button', { name: '进入哨站' }).click();
+  await page.getByRole('button', { name: '练习模式' }).click();
   await expect.poll(async () => (await snapshot(page)).renderCount).toBeGreaterThan(ready + 3);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);

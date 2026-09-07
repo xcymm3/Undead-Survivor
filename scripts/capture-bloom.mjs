@@ -34,6 +34,7 @@ const shot = async (name) => {
 try {
   await page.goto('http://127.0.0.1:5178/');
   await page.waitForFunction(() => window.__undeadTower?.snapshot().weaponAnimation.loaded === true);
+  await page.getByRole('button', { name: '单人模式', exact: true }).hover();
   await shot('main');
   await page.setViewportSize({ width: 1280, height: 800 }); await shot('main-1280');
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -4,7 +4,7 @@ import { WEAPONS } from './game/weapons';
 import { isOpticalSight, weaponSight } from './game/sights';
 import { SightOverlay } from './ui/SightOverlay';
 import { DIFFICULTIES, FIXED_DIFFICULTY } from './game/config';
-import type { GameMode, GameSnapshot } from './game/config';
+import type { GameSnapshot } from './game/config';
 import { DEFAULT_GRAPHICS_SETTINGS } from './game/graphics';
 import type { AntiAliasing, EffectsQuality, FrameLimit, GraphicsPreset, ResolutionScale, ShadowQuality, ViewDistance } from './game/graphics';
 import { formatDuration, LeaderboardStore, personalRecord } from './game/leaderboard';
@@ -52,7 +52,6 @@ export function App() {
   const [record, setRecord] = useState<PersonalRecord | null>(null);
   const hitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [fullscreen, setFullscreen] = useState(false);
-  const [mode, setMode] = useState<GameMode>('practice');
   const scoreDialog = useRef<HTMLDialogElement>(null);
   const [leaderboard] = useState(() => new LeaderboardStore());
   const [entries, setEntries] = useState(() => leaderboard.read());
@@ -159,7 +158,7 @@ export function App() {
         <h1 id="game-title">UNDEAD<br /><span>SURVIVOR</span></h1>
         <p className="intro-line">活到下一波。</p>
       </div>
-      <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} mode={mode} onMode={setMode} onStart={() => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
+      <DeploymentPanel onMultiplayer={() => { setError('' ); setMultiplayer(true); }} onStart={mode => { setFeedback(null); game.current?.begin(mode); }} disabled={Boolean(error) || !state.weaponsReady} onLeaderboard={() => { setEntries(leaderboard.read()); scoreDialog.current?.showModal(); }} />
       {!state.weaponsReady && !error && <div className="weapon-loading" role="status">正在加载武器…</div>}
     </section>}
 

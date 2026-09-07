@@ -21,7 +21,7 @@ async function freezeAt(page: Page, progress: number, initiate = false) {
 test('十种武器数字键切换、右键抬枪、独立弹量、换弹动画与暂停协调', async ({ page }) => {
   test.setTimeout(150000);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/'); await page.getByRole('button', { name: '进入哨站' }).click();
+  await page.goto('/'); await page.getByRole('button', { name: '练习模式' }).click();
   await page.mouse.move(720, 450); await page.waitForTimeout(250);
   await page.addStyleTag({ content: '.pause-screen { visibility: hidden; }' });
   for (let i = 0; i < WEAPONS.length; i++) {
@@ -83,7 +83,7 @@ test('十种武器数字键切换、右键抬枪、独立弹量、换弹动画�
 });
 
 test('半自动不连发，换弹排队切枪、快速改选与切枪暂停不丢失状态', async ({ page }) => {
-  await page.goto('/'); await page.getByRole('button', { name: '进入哨站' }).click();
+  await page.goto('/'); await page.getByRole('button', { name: '练习模式' }).click();
   await page.keyboard.press('Digit3');
   await expect.poll(async () => { const s = await snapshot(page); return s.weaponIndex === 2 && !s.switching; }).toBe(true);
   await page.mouse.move(720, 450); await page.mouse.down(); await page.waitForTimeout(650); await page.mouse.up();

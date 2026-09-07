@@ -47,15 +47,15 @@ test('双端房间开局、双方射击清波、一人观战与全员死亡结�
           leave: () => call('leave'), start: () => call('start'), send: data => { void call('send', data); }, onEvent: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; } };
       });
       await pages[i].goto('/');
-      await expect(pages[i].getByRole('button', { name: '进入哨站' })).toBeEnabled();
+      await expect(pages[i].getByRole('button', { name: '练习模式' })).toBeEnabled();
       await pages[i].getByRole('button', { name: '多人模式' }).click();
     }
     const [host, guest] = pages;
     await host.getByRole('button', { name: '创建房间' }).click();
     await expect(host.getByRole('button', { name: '开始多人游戏' })).toBeDisabled();
     await guest.getByRole('button', { name: '搜索房间' }).click();
-    await guest.getByRole('button', { name: '加入房间', exact: true }).click();
-    await expect(host.getByText('已有 2 人，可以开始或继续等待。')).toBeVisible();
+    await guest.getByRole('button', { name: '加入房间', exact: false }).click();
+    await expect(host.getByText('小队已就绪')).toBeVisible();
     await host.screenshot({ path: 'test-results/coop-room.png' });
     // 联机协议用例固定首波为普通僵尸，避免怪物耐久随机性掩盖网络与观战断言。
     for (const page of pages) await page.evaluate(() => {
@@ -177,7 +177,7 @@ test('浏览器多人入口说明桌面版要求，并可返回单人首页', as
   await page.goto('/'); await page.getByRole('button', { name: '多人模式' }).click();
   await expect(page.getByText('请在桌面版登录 Steam 后联机。', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '返回首页', exact: true }).click();
-  await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
 });
 
 test('四人快照支持左键循环观战并在清波后全员复活', async ({ page }) => {
@@ -191,7 +191,7 @@ test('四人快照支持左键循环观战并在清波后全员复活', async ({
       search: async () => [], join: async () => room, leave: async () => {}, start: async () => {}, send: () => {},
       onEvent: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; } };
   }, { members });
-  await page.goto('/'); await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+  await page.goto('/'); await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
   await page.evaluate(members => (window as any).__testSteamEvent({ type: 'start', match: { session: 'four-player', host: '111', local: '222', members } }), members);
   await capture(page);
   const players = [

@@ -5,7 +5,7 @@ test('五档预设、自定义画质和本机保存均实际生效', async ({ br
   const page = await context.newPage();
   try {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
     const diagnostics = () => page.evaluate(() => window.__undeadTower!.snapshot());
     expect((await diagnostics()).renderResolution.scale).toBe(2);
     await page.getByRole('button', { name: '游戏设置' }).click();
@@ -25,7 +25,7 @@ test('五档预设、自定义画质和本机保存均实际生效', async ({ br
     expect(await diagnostics()).toMatchObject({ graphicsPreset: 'custom', graphics: { antiAliasing: 'smaa', frameLimit: 120 } });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('undead-survivor.graphics')!))).toMatchObject({ antiAliasing: 'smaa', frameLimit: 120 });
     await page.reload();
-    await expect(page.getByRole('button', { name: '进入哨站' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '练习模式' })).toBeEnabled();
     const restored = await diagnostics();
     expect(restored).toMatchObject({ sensitivity: 72, graphicsPreset: 'custom', graphics: { antiAliasing: 'smaa', frameLimit: 120 } });
     expect(restored.renderResolution.width).toBeGreaterThan(960); expect(restored.renderResolution.height).toBeGreaterThan(540);

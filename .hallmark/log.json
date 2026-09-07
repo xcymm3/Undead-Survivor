@@ -2,6 +2,15 @@
   {
     "date": "2026-09-07",
     "scope": "homepage",
+    "macrostructure": "Live scene / right campaign list",
+    "theme": "custom",
+    "theme_axes": "dark / condensed / blood-red",
+    "enrichment": "original in-game scene",
+    "brief": "参考求生之路首页，三个模式同级直接进入，保留其他菜单"
+  },
+  {
+    "date": "2026-09-07",
+    "scope": "homepage",
     "macrostructure": "Photographic live game scene + right-side launcher",
     "theme": "Bloom",
     "nav": "left floating toolbar",

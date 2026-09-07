@@ -78,3 +78,12 @@
   --color-menu-shade-soft: oklch(17% .023 160 / .14);
   --color-menu-shadow: oklch(12% .023 160 / .32);
 }
+
+:root {
+  --color-home-dark: oklch(13% .015 145 / .88);
+  --color-home-fade: oklch(17% .015 145 / .2);
+  --color-home-red: oklch(49% .18 27);
+  --color-home-red-fade: oklch(49% .18 27 / .03);
+  --color-home-muted: oklch(76% .014 85);
+  --color-home-rule: oklch(90% .018 80 / .2);
+}

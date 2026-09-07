@@ -4,21 +4,15 @@ import type { Difficulty, GameMode, GameSnapshot, RunResult } from '../game/conf
 import { formatDuration } from '../game/leaderboard';
 import type { PersonalRecord } from '../game/leaderboard';
 
-export function DeploymentPanel({ mode, onMode, onStart, onLeaderboard, onMultiplayer, disabled }: {
-  mode: GameMode; onMode: (mode: GameMode) => void; onStart: () => void; onLeaderboard: () => void; onMultiplayer: () => void; disabled: boolean;
+export function DeploymentPanel({ onStart, onLeaderboard, onMultiplayer, disabled }: {
+  onStart: (mode: GameMode) => void; onLeaderboard: () => void; onMultiplayer: () => void; disabled: boolean;
 }) {
-  return <div className="deployment-panel">
-    <h2 className="deployment-title">准备出发</h2>
-    <div className="mode-options" role="group" aria-label="游戏模式">
-      <button className="mode-option" aria-pressed={mode === 'practice'} onClick={() => onMode('practice')}>练习模式</button>
-      <button className="mode-option" aria-pressed={mode === 'survival'} onClick={() => onMode('survival')}>正式模式</button>
-    </div>
-    <div className="deployment-detail">
-      <p>{mode === 'survival' ? '守住尸群，清波回血。落水即失败。' : '静止靶练习，不计分。落水即失败。'}</p>
-    </div>
-    <button className="start-button" onClick={onStart} disabled={disabled}><span>{mode === 'practice' ? '进入哨站' : '开始坚守'}</span><span aria-hidden="true">→</span></button>
-    <div className="menu-secondary"><button className="multiplayer-button" onClick={onMultiplayer} disabled={disabled}>多人模式 <span>↗</span></button><button className="leaderboard-link" onClick={onLeaderboard}>排行榜 <span>↗</span></button></div>
-  </div>;
+  return <nav className="deployment-panel" aria-label="游戏模式">
+    <button className="campaign-option" onClick={() => onStart('practice')} disabled={disabled}>练习模式</button>
+    <button className="campaign-option" onClick={() => onStart('survival')} disabled={disabled}>单人模式</button>
+    <button className="campaign-option" onClick={onMultiplayer} disabled={disabled}>多人模式</button>
+    <div className="menu-secondary"><button className="leaderboard-link" onClick={onLeaderboard}>排行榜</button></div>
+  </nav>;
 }
 
 export function LeaderboardTable({ entries, difficulty, highlightId }: { entries: RunResult[]; difficulty: Difficulty; highlightId?: string }) {

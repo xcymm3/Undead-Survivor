@@ -28,8 +28,7 @@ test('浏览器拒绝捕获时冻结战斗，点击场景后可重新捕获', as
     };
   });
   await page.goto('/');
-  await page.getByRole('button', { name: '正式模式' }).click();
-  await page.getByRole('button', { name: '开始坚守' }).click();
+  await page.getByRole('button', { name: '单人模式' }).click();
   await expect(page.locator('.pointer-hint')).toBeVisible();
   await page.keyboard.down('w'); await page.waitForTimeout(500); await page.keyboard.up('w');
   const frozen = await snapshot(page);

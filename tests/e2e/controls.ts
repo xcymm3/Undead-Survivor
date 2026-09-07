@@ -11,8 +11,7 @@ export async function capture(page: Page) {
 }
 export async function start(page: Page, mode: 'practice' | 'survival' = 'practice') {
   await page.goto('/');
-  if (mode === 'survival') await page.getByRole('button', { name: '正式模式' }).click();
-  await page.getByRole('button', { name: mode === 'practice' ? '进入哨站' : '开始坚守' }).click();
+  await page.getByRole('button', { name: mode === 'practice' ? '练习模式' : '单人模式' }).click();
   await capture(page);
 }
 export async function lookAt(page: Page, x: number, y: number, z: number) {
