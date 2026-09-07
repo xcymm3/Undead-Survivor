@@ -16,7 +16,7 @@ function surface(scene: THREE.Scene, vertices: number[], color: number) {
 }
 
 /** 地面与公路真正挖开河槽；河岸线直接取自碰撞数据。 */
-export function createTerrain(scene: THREE.Scene) {
+export function createTerrain(scene: THREE.Scene, solid?: (object: THREE.Object3D, id: string) => void) {
   const splitGround = (minX: number, maxX: number, minZ: number, maxZ: number, y: number, color: number) => {
     const vertices: number[] = [];
     const xs = [minX, ...RIVER_POINTS.map(p => p.x).filter(x => x > minX && x < maxX), maxX];
@@ -64,7 +64,8 @@ export function createTerrain(scene: THREE.Scene) {
     for (const x of [-bridge.halfWidth, bridge.halfWidth]) {
       box(group, [0.10, 0.14, bridge.halfLength * 2], [x, 0.04, 0], 0xc1ac70);
       for (const z of [-bridge.halfLength, bridge.halfLength]) {
-        box(group, [0.12, 0.75, 0.12], [x + Math.sign(x) * 0.2, 0.375, z], 0xbdb079);
+        const post = box(group, [0.12, 0.75, 0.12], [x + Math.sign(x) * 0.2, 0.375, z], 0xbdb079);
+        solid?.(post, `${bridge.id}-post-${x}-${z}`);
       }
     }
   }

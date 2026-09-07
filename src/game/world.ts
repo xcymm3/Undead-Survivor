@@ -21,6 +21,7 @@ function sign(parent: THREE.Object3D, text: string, subtitle: string, x: number,
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * 160 / 512), new THREE.MeshStandardMaterial({ map: texture, roughness: 1 }));
   mesh.position.set(x, y, z);
   parent.add(mesh);
+  return mesh;
 }
 
 function building(scene: THREE.Scene, x: number, z: number) {
@@ -93,9 +94,13 @@ export function createWorld(scene: THREE.Scene) {
   sun.shadow.normalBias = 0.035;
   sun.target.position.set(0, 0, -20);
   scene.add(sun, sun.target);
-  createTerrain(scene);
+  createTerrain(scene, solid);
   for (const [index, bridge] of BRIDGES.entries()) {
-    sign(scene, `BRIDGE 0${index + 1}`, 'CROSSING / DEEP WATER', bridge.x + bridge.halfWidth + 1.4, 1.7, bridge.z + bridge.halfLength + 0.3, 3.3);
+    const x = bridge.x + bridge.halfWidth + 1.4, z = bridge.z + bridge.halfLength + 0.3;
+    // 标牌板面与支架共享可见实体边界，玩家与僵尸使用同一碰撞数据。
+    solid(box(scene, [3.3, 1.03, .14], [x, 1.7, z - .08], 0x303e38), `${bridge.id}-sign`);
+    sign(scene, `BRIDGE 0${index + 1}`, 'CROSSING / DEEP WATER', x, 1.7, z, 3.3);
+    for (const offset of [-1.1, 1.1]) solid(box(scene, [.12, 1.7, .12], [x + offset, .85, z - .08], 0x706a50), `${bridge.id}-sign-post-${offset}`);
   }
 
   const random = seededRandom(42031);
