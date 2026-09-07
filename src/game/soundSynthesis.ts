@@ -1,19 +1,64 @@
-/** 原创离线合成 PCM，不依赖网络或外部音频素材。 */
+import type { ZombieKind } from './config';
+
+/** 原创声带激励 + 两段元音共振，形成短促的“呃—啊”而非电子降调。 */
 export function synthesizeDeath(sampleRate: number, variant: number) {
-  const duration = 0.62 + variant * 0.055;
+  const duration = .86 + variant * .075;
   const samples = new Float32Array(Math.ceil(sampleRate * duration));
-  let phase = 0, seed = 1729 + variant * 733;
+  const states = Array.from({ length: 3 }, () => ({ a: 0, b: 0 }));
+  let phase = 0, seed = 1729 + variant * 733, previous = 0;
   for (let i = 0; i < samples.length; i++) {
-    const t = i / sampleRate, progress = t / duration;
-    const pitch = (135 + variant * 14) * (1 - 0.48 * progress) + Math.sin(t * 37) * 5;
-    phase += pitch / sampleRate;
+    const t = i / sampleRate, p = t / duration;
+    const vowel = Math.max(0, Math.min(1, (p - .23) / .24));
+    const pitch = (103 + variant * 9) * (1 - .38 * p) + Math.sin(t * 31) * 3;
+    phase = (phase + pitch / sampleRate) % 1;
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     const noise = seed / 0xffffffff * 2 - 1;
-    // 声带谐波加轻微气声与颤动，音高随死亡叫声下降。
-    const voice = Math.sin(phase * Math.PI * 2) * 0.48 + Math.sin(phase * Math.PI * 4) * 0.22 + Math.sin(phase * Math.PI * 8) * 0.12;
-    const breath = noise * 0.09 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2));
-    const envelope = Math.min(1, t / 0.035) * Math.pow(1 - progress, 1.2) * (0.85 + 0.15 * Math.sin(t * 64));
-    samples[i] = (voice + breath) * envelope;
+    // 声门缓开快闭；微分脉冲包含元音所需的宽频谐波。
+    const glottis = phase < .65 ? Math.sin(Math.PI * phase / .65) ** 2 : 0;
+    const excitation = (glottis - previous) * 7 + noise * (.055 + .11 * p);
+    previous = glottis;
+    const formants = [390 + vowel * 360, 1150 - vowel * 110, 2350 + variant * 65];
+    let voice = 0;
+    for (let f = 0; f < 3; f++) {
+      const frequency = Math.min(sampleRate * .42, formants[f]);
+      const r = Math.exp(-Math.PI * [95, 145, 220][f] / sampleRate);
+      const state = states[f];
+      const next = excitation * (1 - r) + 2 * r * Math.cos(2 * Math.PI * frequency / sampleRate) * state.a - r * r * state.b;
+      state.b = state.a; state.a = next;
+      voice += next * [1, .55, .18][f];
+    }
+    const rasp = .78 + .22 * Math.sin(t * pitch * Math.PI);
+    const syllable = 1 - .4 * Math.exp(-(((p - .27) / .065) ** 2));
+    const envelope = Math.min(1, t / .025) * Math.min(1, (duration - t) / .16) * (1 - .45 * p) * syllable;
+    samples[i] = Math.tanh(voice * 3.6) * rasp * envelope;
+  }
+  return samples;
+}
+
+/** 不等间距模态频率模拟桶壁、盾面和塑料壳的敲击共振，无滑音。 */
+export function synthesizeArmor(sampleRate: number, kind: ZombieKind, broken: boolean) {
+  const metal = kind === 'bucket', shield = kind === 'shield';
+  const duration = metal ? (broken ? .95 : .58) : broken ? .42 : .22;
+  const modes = metal ? [487, 803, 1379, 2213, 3467] : shield ? [185, 417, 936, 1681] : kind === 'football' ? [264, 571, 1223] : [173, 389, 827];
+  const samples = new Float32Array(Math.ceil(sampleRate * duration));
+  let seed = 543 + (metal ? 11 : shield ? 29 : kind === 'football' ? 41 : 0), low = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const t = i / sampleRate;
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const noise = seed / 0xffffffff * 2 - 1; low += (noise - low) * .22;
+    let value = 0;
+    for (let hit = 0; hit < (broken ? 3 : 1); hit++) {
+      const age = t - [0, .13, .27][hit]; if (age < 0) continue;
+      const strength = [1, .43, .24][hit];
+      value += strength * (metal ? noise - low : low) * Math.exp(-age * (metal ? 105 : 70)) * .38;
+      for (let mode = 0; mode < modes.length; mode++) {
+        const frequency = Math.min(sampleRate * .43, modes[mode] * (1 + hit * .027));
+        const decay = metal ? 7 + mode * 3 : (shield ? 22 : 34) + mode * 12;
+        const ring = Math.sin(2 * Math.PI * frequency * age) + (metal ? .25 * Math.sin(2 * Math.PI * (frequency + 7) * age) : 0);
+        value += strength * ring * Math.exp(-age * decay) * .28 / (1 + mode * .55);
+      }
+    }
+    samples[i] = Math.tanh(value * 1.3) * Math.min(1, t / .0015) * Math.min(1, (duration - t) / .03);
   }
   return samples;
 }

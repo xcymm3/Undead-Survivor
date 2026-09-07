@@ -1,5 +1,5 @@
 import type { ZombieKind } from './config';
-import { synthesizeDeath, synthesizeMusic } from './soundSynthesis';
+import { synthesizeArmor, synthesizeDeath, synthesizeMusic } from './soundSynthesis';
 
 export const AUDIO_SETTINGS_KEY = 'undead-tower.audio.v1';
 const MUSIC_LEVEL = 0.028;
@@ -17,6 +17,8 @@ export class GameAudio {
   private duckUntil = 0;
   private playing = false;
   private disposed = false;
+  private armorBuffers = new Map<string, AudioBuffer>();
+  private armorSources = new Set<AudioBufferSourceNode>();
   private deaths = new Map<number, AudioBuffer>();
   private deathSources = new Set<AudioBufferSourceNode>();
   private deathCues = 0;
@@ -186,18 +188,20 @@ export class GameAudio {
   }
 
   armor(kind: ZombieKind, broken: boolean) {
-    if (!this.context || !this.enabled || this.level === 0 || this.context.state !== 'running') return;
+    const ctx = this.context;
+    if (!ctx || !this.master || !this.enabled || this.level === 0 || ctx.state !== 'running') return;
     this.armorCues++; this.lastArmorCue = { kind, broken };
-    if (kind === 'bucket') {
-      // 非整数泛音形成中空金属桶余响，略错开枪声起音以便听清。
-      this.tone(broken ? 620 : 1480, broken ? 350 : 1390, broken ? 0.42 : 0.27, 0.09, 'sine', 0.035);
-      this.tone(broken ? 1010 : 2370, broken ? 610 : 2200, 0.23, 0.045, 'sine', 0.035);
-      this.tone(3540, 3100, 0.08, 0.025, 'sine', 0.035);
-    } else {
-      // 塑料路锥以低沉的空腔撞击搭配短促的敲击起音。
-      this.tone(broken ? 260 : 430, 95, broken ? 0.22 : 0.13, 0.11, 'triangle', 0.035);
-      this.tone(1050, 390, 0.055, 0.045, 'square', 0.035);
+    const key = `${kind}-${broken}`;
+    if (!this.armorBuffers.has(key)) this.armorBuffers.set(key, this.buffer(synthesizeArmor(ctx.sampleRate, kind, broken)));
+    if (this.armorSources.size >= 4) {
+      const oldest = this.armorSources.values().next().value!; oldest.stop(); this.armorSources.delete(oldest);
     }
+    const source = ctx.createBufferSource(); source.buffer = this.armorBuffers.get(key)!;
+    const gain = ctx.createGain(); gain.gain.value = broken ? .32 : .26;
+    source.connect(gain).connect(this.master);
+    source.onended = () => { source.disconnect(); gain.disconnect(); this.armorSources.delete(source); };
+    this.armorSources.add(source); source.start(ctx.currentTime + .025);
+    this.duckMusic(source.buffer.duration);
   }
 
   death() {
@@ -211,7 +215,7 @@ export class GameAudio {
       oldest.stop(); this.deathSources.delete(oldest);
     }
     const source = ctx.createBufferSource(); source.buffer = this.deaths.get(variant)!;
-    const gain = ctx.createGain(); gain.gain.value = 0.12;
+    const gain = ctx.createGain(); gain.gain.value = 0.23;
     source.connect(gain).connect(this.master);
     source.onended = () => { source.disconnect(); gain.disconnect(); this.deathSources.delete(source); };
     this.deathSources.add(source); source.start();
@@ -219,5 +223,5 @@ export class GameAudio {
   }
 
   diagnostics() { return { enabled: this.enabled, volume: this.volume, gain: this.master?.gain.value ?? (this.muted ? 0 : this.level), armorCues: this.armorCues, lastArmorCue: this.lastArmorCue, deathCues: this.deathCues, failureCues: this.failureCues, mechanicalCues: this.mechanicalCues, activeDeaths: this.deathSources.size, musicPlaying: Boolean(this.musicSource), musicLevel: MUSIC_LEVEL, musicDucked: Boolean(this.musicSource && this.context && this.context.currentTime < this.duckUntil), duckedMusicLevel: DUCKED_MUSIC_LEVEL }; }
-  dispose() { this.disposed = true; this.setPlaying(false); this.deathSources.clear(); void this.context?.close().catch(() => {}); }
+  dispose() { this.disposed = true; this.setPlaying(false); this.deathSources.clear(); this.armorSources.clear(); void this.context?.close().catch(() => {}); }
 }

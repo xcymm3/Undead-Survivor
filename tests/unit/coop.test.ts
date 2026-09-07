@@ -194,3 +194,13 @@ describe('2～4 人房主权威模拟', () => {
     expect(guest.consumeRevival()).toBe(true);
   });
 });
+
+it('护甲命中音色随权威反馈传给射击者，拒绝伪造来源与未知材质', () => {
+  const { host, guest, packets } = pair();
+  host.sendHit('222', true, true, true, 'bucket');
+  guest.receive('333', packets[0]); expect(guest.feedback).toHaveLength(0);
+  guest.receive('111', packets[0]);
+  expect(guest.feedback[0]).toEqual({ head: true, killed: true, armorBroken: true, armorKind: 'bucket' });
+  guest.receive('111', { ...(packets[0] as object), armorKind: 'untrusted' });
+  expect(guest.feedback[1].armorKind).toBeUndefined();
+});

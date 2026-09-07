@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AUDIO_SETTINGS_KEY, GameAudio } from '../../src/game/audio';
-import { synthesizeDeath, synthesizeMusic } from '../../src/game/soundSynthesis';
+import { synthesizeArmor, synthesizeDeath, synthesizeMusic } from '../../src/game/soundSynthesis';
 
 afterEach(() => vi.unstubAllGlobals());
 function setup() {
@@ -26,7 +26,7 @@ describe('统一音量与护甲声音', () => {
     audio.shot(); audio.armor('bucket', false);
     const master = nodes[0];
     expect(master.gain.value).toBe(0.35);
-    expect(nodes.slice(1).filter(n => n.connect.mock.calls.some(([target]) => target === master)).length).toBe(5);
+    expect(nodes.slice(1).filter(n => n.connect.mock.calls.some(([target]) => target === master)).length).toBe(3);
     audio.enabled = false; expect(master.gain.value).toBe(0);
     const count = nodes.length; audio.shot(); audio.armor('cone', true); expect(nodes).toHaveLength(count);
     audio.enabled = true; expect(master.gain.value).toBe(0.35);
@@ -34,9 +34,9 @@ describe('统一音量与护甲声音', () => {
     expect(new GameAudio().volume).toBe(0);
   });
   it('护甲命中和脱落有不同音色，持久化且损坏设置不阻止启动', () => {
-    const { data, nodes } = setup(); const audio = new GameAudio(); audio.unlock();
-    audio.armor('cone', false); const cone = nodes[1].frequency.setValueAtTime.mock.calls[0][0];
-    audio.armor('bucket', true); const bucket = nodes[5].frequency.setValueAtTime.mock.calls[0][0];
+    const { data } = setup(); const audio = new GameAudio(); audio.unlock();
+    audio.armor('cone', false); const cone = synthesizeArmor(24000, 'cone', false);
+    audio.armor('bucket', true); const bucket = synthesizeArmor(24000, 'bucket', true);
     expect(cone).not.toBe(bucket);
     expect(audio.diagnostics().lastArmorCue).toEqual({ kind: 'bucket', broken: true });
     audio.volume = 0.42; audio.enabled = false;
@@ -90,4 +90,20 @@ describe('统一音量与护甲声音', () => {
     expect(rms(music) * 0.028).toBeLessThan(rms(death) * 0.12 / 3);
     expect(synthesizeDeath(24000, 1)).not.toEqual(death);
   });
+});
+
+it('护甲材质独立、破碎有后续撞击、常用采样率无削波和无效样本', () => {
+  for (const rate of [24000, 44100, 48000]) {
+    for (const kind of ['bucket', 'cone', 'shield', 'football'] as const) {
+      const hit = synthesizeArmor(rate, kind, false), broken = synthesizeArmor(rate, kind, true);
+      expect(broken.length).toBeGreaterThan(hit.length);
+      expect(hit.every(v => Number.isFinite(v) && Math.abs(v) < 1)).toBe(true);
+      expect(broken.every(v => Number.isFinite(v) && Math.abs(v) < 1)).toBe(true);
+      expect(Math.abs(hit[0])).toBe(0);
+    }
+    for (let variant = 0; variant < 3; variant++) expect(synthesizeDeath(rate, variant).every(v => Number.isFinite(v) && Math.abs(v) < 1)).toBe(true);
+  }
+  const cone = synthesizeArmor(24000, 'cone', false);
+  expect(synthesizeArmor(24000, 'football', false)).not.toEqual(cone);
+  expect(synthesizeArmor(24000, 'shield', false)).not.toEqual(cone);
 });

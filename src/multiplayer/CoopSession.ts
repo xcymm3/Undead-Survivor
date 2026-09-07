@@ -1,5 +1,5 @@
 import { Arsenal } from '../game/arsenal';
-import { PLAYER } from '../game/config';
+import { PLAYER, type ZombieKind } from '../game/config';
 import { Navigation } from '../game/navigation';
 import { PlayerMotion } from '../game/player';
 import type { Encounter } from '../game/encounter';
@@ -34,7 +34,7 @@ export class CoopSession {
   private zombieTracks = new Map<number, { fromX: number; fromZ: number; fromHeading: number; toX: number; toZ: number; toHeading: number; elapsed: number; duration: number }>();
   lastPacketAt = performance.now();
   authoritativeKeys = new Set<string>();
-  feedback: { head: boolean; killed: boolean; armorBroken: boolean }[] = [];
+  feedback: { head: boolean; killed: boolean; armorBroken: boolean; armorKind?: ZombieKind }[] = [];
 
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
     private send: (data: unknown) => void, appearance: PlayerAppearance = randomAppearance()) {
@@ -103,9 +103,10 @@ export class CoopSession {
     }
     if (from !== this.match.host || !data || typeof data !== 'object' || !('type' in data)) return;
     if (data.type === 'hit') {
-      const hit = data as { to?: unknown; head?: unknown; killed?: unknown; armorBroken?: unknown };
+      const hit = data as { to?: unknown; head?: unknown; killed?: unknown; armorBroken?: unknown; armorKind?: unknown };
       if (hit.to === this.local.id && [hit.head, hit.killed, hit.armorBroken].every(value => typeof value === 'boolean') && this.feedback.length < 32) {
-        this.feedback.push({ head: hit.head as boolean, killed: hit.killed as boolean, armorBroken: hit.armorBroken as boolean });
+        this.feedback.push({ head: hit.head as boolean, killed: hit.killed as boolean, armorBroken: hit.armorBroken as boolean,
+          armorKind: ['cone', 'bucket', 'shield', 'football'].includes(hit.armorKind as string) ? hit.armorKind as ZombieKind : undefined });
       }
       return;
     }
@@ -206,7 +207,7 @@ export class CoopSession {
     return localWasDead;
   }
 
-  sendHit(to: string, head: boolean, killed: boolean, armorBroken: boolean) { this.send({ type: 'hit', to, head, killed, armorBroken }); }
+  sendHit(to: string, head: boolean, killed: boolean, armorBroken: boolean, armorKind?: ZombieKind) { this.send({ type: 'hit', to, head, killed, armorBroken, armorKind }); }
 
   broadcast(delta: number, force = false) {
     if (!this.host) return;

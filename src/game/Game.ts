@@ -652,6 +652,7 @@ export class Game {
     const center = aim.clone().sub(muzzle).normalize(), right = new THREE.Vector3().crossVectors(center, camera.up).normalize();
     const up = new THREE.Vector3().crossVectors(right, center).normalize();
     let landed = false, head = false, killed = false, armorBroken = false;
+    let armorKind: Parameters<GameAudio['armor']>[0] | undefined;
     const damaged = new Set<number>();
     for (let i = 0; i < gun.pellets; i++) {
       const offset = pelletOffset(gun, i, arsenal.gun.shots);
@@ -665,14 +666,15 @@ export class Game {
         const damage = this.encounter.hit(target.id, target.head, gun.damage * multiplier, target.armor ?? true);
         if (damage) {
           if (!this.background && damage.armorBroken && damage.armorHit) this.armorEffects.release(this.zombieField.captureArmor(target.id, damage.armorHit), direction);
-          if (!this.background && damage.killed) this.blood.burst(hit.point, direction, target.head);
+          if (!this.background && damage.killed) { this.blood.burst(hit.point, direction, target.head); this.audio.death(); }
+          if (damage.armorHit) { armorKind = damage.armorHit; if (!this.background) this.audio.armor(armorKind, damage.armorBroken); }
           landed = true; head ||= target.head; killed ||= damage.killed; armorBroken ||= damage.armorBroken;
         }
         this.zombieField.sync(this.encounter); this.scene.updateMatrixWorld(true);
       }
       this.addShotEffect(muzzle, trace.end, direction, gun);
     }
-    if (landed) this.coop?.sendHit(pawn.id, head, killed, armorBroken);
+    if (landed) this.coop?.sendHit(pawn.id, head, killed, armorBroken, armorKind);
     if (!this.background) this.audio.shot(gun.kind);
   };
 
@@ -713,7 +715,8 @@ export class Game {
         this.encounter.player.x += (local.x - this.encounter.player.x) / discrepancy * distance;
         this.encounter.player.z += (local.z - this.encounter.player.z) / discrepancy * distance;
       }
-      for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); this.audio.tone(950, 450, .07, .025); }
+      for (const hit of coop.feedback.splice(0)) { this.hitCount++; this.callbacks.onHit(hit.head, hit.killed, hit.armorBroken); if (hit.killed) this.audio.death();
+        if (hit.armorKind) this.audio.armor(hit.armorKind, hit.armorBroken); else this.audio.tone(950, 450, .07, .025); }
     }
     this.encounter.health = local.health; this.encounter.lastDamageAt = local.lastDamageAt; this.kills = this.encounter.kills;
     this.weapon.root.visible = local.health > 0 || coop.remotes.some(player => player.health > 0);
