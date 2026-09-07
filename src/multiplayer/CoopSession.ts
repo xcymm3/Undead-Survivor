@@ -5,7 +5,7 @@ import { PlayerMotion } from '../game/player';
 import type { Encounter } from '../game/encounter';
 import type { Match, Pawn, Command, WorldState } from './types';
 import { validCommand, validWorld } from './types';
-import { defaultAppearance, normalizeAppearance } from './appearance';
+import { defaultAppearance, normalizeAppearance, randomAppearance } from './appearance';
 import type { PlayerAppearance } from './appearance';
 
 const compact = (value: number) => Math.round(value * 1000) / 1000;
@@ -37,7 +37,7 @@ export class CoopSession {
   feedback: { head: boolean; killed: boolean; armorBroken: boolean }[] = [];
 
   constructor(readonly match: Match, readonly encounter: Encounter, navigation: Navigation,
-    private send: (data: unknown) => void, appearance: PlayerAppearance = defaultAppearance(match.members.findIndex(member => member.id === match.local))) {
+    private send: (data: unknown) => void, appearance: PlayerAppearance = randomAppearance()) {
     this.host = match.host === match.local;
     this.selectedAppearance = normalizeAppearance(appearance);
     this.players = match.members.map((member, index) => ({ ...member, ...SPAWNS[index], height: 0, yaw: 0, pitch: 0,

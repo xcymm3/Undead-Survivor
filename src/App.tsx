@@ -11,7 +11,7 @@ import { formatDuration, LeaderboardStore, personalRecord } from './game/leaderb
 import type { PersonalRecord } from './game/leaderboard';
 import { BreachOverlay, DeploymentPanel, LeaderboardTable, ResultPanel } from './ui/SessionPanels';
 import { MultiplayerPanel } from './ui/MultiplayerPanel';
-import { loadAppearance } from './multiplayer/appearance';
+import { randomAppearance } from './multiplayer/appearance';
 
 const initialState: GameSnapshot = { wave: 1, wavesCleared: 0, waveTotal: 9, waveSpawned: 0, intermission: 0, grounded: true, playerHeight: 0, health: 100, hurt: false, pointerLocked: false, weaponsReady: false, weaponIndex: 0, requestedWeapon: 0, switching: false, reloadQueued: false, aiming: false, inventory: WEAPONS.map(gun => gun.capacity), phase: 'ready', mode: 'practice', difficulty: FIXED_DIFFICULTY, survived: 0, alive: 4, zombieCounts: { normal: 4, cone: 0, bucket: 0, imp: 0, shield: 0, berserker: 0, giant: 0, football: 0 }, nearest: null, spawnRate: 0, speed: 0, result: null, ammo: 30, reloading: false, reloadStage: null, shots: 0, hits: 0, kills: 0, fps: 0, yaw: 0, pitch: 0, sound: true, volume: 1, sensitivity: 100, breach: null, pixelated: false, graphicsPreset: 'quality', graphics: { ...DEFAULT_GRAPHICS_SETTINGS }, renderResolution: { width: 1, height: 1, scale: 1, gpu: '未识别' } };
 
@@ -87,7 +87,7 @@ export function App() {
     }
     const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
     const offSteam = window.steamCoop?.onEvent(event => {
-      if (event.type === 'start') { setError(''); setFeedback(null); setMultiplayer(false); game.current?.beginCoop(event.match, data => window.steamCoop?.send(data), loadAppearance()); }
+      if (event.type === 'start') { setError(''); setFeedback(null); setMultiplayer(false); game.current?.beginCoop(event.match, data => window.steamCoop?.send(data), randomAppearance()); }
       if (event.type === 'status' && event.status.room) game.current?.updateCoopMembers(event.status.room.members);
       if (event.type === 'packet') game.current?.receiveCoop(event.from, event.data);
       if (event.type === 'left') { game.current?.menu(); setError(event.message); setMultiplayer(true); }

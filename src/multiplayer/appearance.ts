@@ -1,5 +1,3 @@
-export const APPEARANCE_STORAGE_KEY = 'undead-survivor.multiplayer-appearance';
-
 export const CHARACTER_PRESETS = [
   { id: 'soldier-male', label: '男士兵', file: 'Soldier_Male.gltf', primaryMaterials: ['Main', 'Helmet'], accentMaterials: ['DarkGreen'] },
   { id: 'soldier-female', label: '女士兵', file: 'Soldier_Female.gltf', primaryMaterials: ['Main'], accentMaterials: ['DarkGreen', 'Hair'] },
@@ -36,13 +34,10 @@ export function defaultAppearance(index: number): PlayerAppearance {
   return { character: CHARACTER_PRESETS[index % CHARACTER_PRESETS.length].id, primary: index % APPEARANCE_COLORS.length, accent: (index + 3) % APPEARANCE_COLORS.length };
 }
 
-export function loadAppearance(storage: Pick<Storage, 'getItem'> = localStorage) {
-  try { return normalizeAppearance(JSON.parse(storage.getItem(APPEARANCE_STORAGE_KEY) ?? 'null')); }
-  catch { return { ...DEFAULT_APPEARANCE }; }
-}
-
-export function saveAppearance(appearance: PlayerAppearance, storage: Pick<Storage, 'setItem'> = localStorage) {
-  const normalized = normalizeAppearance(appearance);
-  try { storage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(normalized)); } catch { /* 当前会话仍保留选择。 */ }
-  return normalized;
+/** 每局生成一次，后续快照、复活和重传沿用这一外貌。 */
+export function randomAppearance(random = Math.random): PlayerAppearance {
+  const pick = (length: number) => Math.min(length - 1, Math.max(0, Math.floor(random() * length)));
+  const primary = pick(APPEARANCE_COLORS.length);
+  const accent = (primary + 1 + pick(APPEARANCE_COLORS.length - 1)) % APPEARANCE_COLORS.length;
+  return { character: CHARACTER_PRESETS[pick(CHARACTER_PRESETS.length)].id, primary, accent };
 }

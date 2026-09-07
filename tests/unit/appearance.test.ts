@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPEARANCE_COLORS, CHARACTER_PRESETS, DEFAULT_APPEARANCE, isValidAppearance, loadAppearance, normalizeAppearance, saveAppearance } from '../../src/multiplayer/appearance';
+import { APPEARANCE_COLORS, CHARACTER_PRESETS, DEFAULT_APPEARANCE, isValidAppearance, normalizeAppearance, randomAppearance } from '../../src/multiplayer/appearance';
 
 describe('多人角色外貌', () => {
   it('接受六种角色与调色板索引并修正非法输入', () => {
@@ -10,9 +10,11 @@ describe('多人角色外貌', () => {
     expect(isValidAppearance({ character: 'worker-female', primary: 8, accent: 2 })).toBe(false);
   });
 
-  it('外貌只写入本机存储并能恢复', () => {
-    const data = new Map<string, string>(), storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
-    const appearance = saveAppearance({ character: 'casual-female', primary: 3, accent: 1 }, storage);
-    expect(loadAppearance(storage)).toEqual(appearance);
+  it('每局随机选择角色和两种不同配色，不依赖保存的外貌', () => {
+    const low = randomAppearance(() => 0), high = randomAppearance(() => .999);
+    expect(low).toEqual({ character: 'soldier-male', primary: 0, accent: 1 });
+    expect(high).toEqual({ character: 'worker-female', primary: 5, accent: 4 });
+    expect(isValidAppearance(low)).toBe(true); expect(isValidAppearance(high)).toBe(true);
+    expect(low.primary).not.toBe(low.accent); expect(high.primary).not.toBe(high.accent);
   });
 });
