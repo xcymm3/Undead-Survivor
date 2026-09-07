@@ -1,3 +1,4 @@
+import { simultaneousCap } from '../../src/game/enemyRoster';
 import { describe, expect, it } from 'vitest';
 import { ENEMY_RULES, ZOMBIE_TYPES } from '../../src/game/config';
 import { Encounter, waveSettings, type Zombie } from '../../src/game/encounter';
@@ -171,4 +172,15 @@ describe('类型攻击节奏', () => {
     giantEncounter.update(.66, () => null);
     expect(players.map(player => player.health)).toEqual([90, 90]);
   });
+});
+
+it('仅橄榄球保留单类在场限制，其他特殊类型不设上限', () => {
+  for (const wave of [3, 5, 7, 9, 12]) for (const players of [1, 2, 3, 4]) {
+    for (const kind of ['imp', 'shield', 'berserker', 'giant'] as const) expect(simultaneousCap(kind, wave, players)).toBe(Infinity);
+  }
+  expect(simultaneousCap('football', 7, 4)).toBe(1);
+  expect(simultaneousCap('football', 9, 1)).toBe(2);
+  expect(simultaneousCap('football', 9, 4)).toBe(3);
+  expect(simultaneousCap('football', 12, 1)).toBe(3);
+  expect(simultaneousCap('football', 12, 4)).toBe(4);
 });

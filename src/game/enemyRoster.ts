@@ -61,8 +61,6 @@ export function waveRoster(wave: number, count: number, difficulty: Difficulty =
 
 export function simultaneousCap(kind: ZombieKind, wave: number, players: number) {
   const coop = players >= 3;
-  if (kind === 'shield' || kind === 'berserker') return wave >= 9 ? (coop ? 8 : 6) : (coop ? 6 : 4);
-  if (kind === 'giant') return wave >= 9 ? (coop ? 3 : 2) : (coop ? 2 : 1);
   if (kind === 'football') {
     if (wave <= 8) return 1;
     if (wave <= 10) return coop ? 3 : 2;

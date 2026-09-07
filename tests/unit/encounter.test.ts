@@ -145,14 +145,11 @@ describe('练习与正式模式', () => {
     expect(encounter.totalSpawned).toBe(0);
   });
 
-  it('存活与倒地实例数量受总容量和高威胁类型上限共同约束', () => {
+  it('存活与倒地实例受总容量约束，仅橄榄球保留单类上限', () => {
     const encounter = new Encounter(); encounter.reset('survival', 'hard'); encounter.wave = 100;
     encounter.update(40, () => ({ x: 10000, z: -10000 }));
     expect(encounter.zombies.length).toBeLessThanOrEqual(SURVIVAL.maxZombies);
     expect(encounter.zombies.length).toBeGreaterThanOrEqual(79);
-    expect(encounter.zombieCounts.shield).toBeLessThanOrEqual(6);
-    expect(encounter.zombieCounts.berserker).toBeLessThanOrEqual(6);
-    expect(encounter.zombieCounts.giant).toBeLessThanOrEqual(2);
     expect(encounter.zombieCounts.football).toBeLessThanOrEqual(3);
   }, 15000);
 });
