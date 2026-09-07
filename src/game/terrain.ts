@@ -26,6 +26,26 @@ export function inRiver(p: Position) {
 }
 export function isWater(p: Position) { return inRiver(p) && !onBridge(p); }
 
+/** 玩家脚底仍搭着岸边或桥面时保留支撑；独立于僵尸的保守寻路边界。 */
+export function isPlayerInWater(p: Position) {
+  if (!isWater(p)) return false;
+  const supportRadius = .22;
+  const distanceToSegment = (a: Position, b: Position) => {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(p.x - a.x - t * dx, p.z - a.z - t * dz);
+  };
+  for (let i = 1; i < RIVER_POINTS.length; i++) {
+    const a = RIVER_POINTS[i - 1], b = RIVER_POINTS[i];
+    for (const side of [-1, 1]) {
+      if (distanceToSegment({ x: a.x, z: a.z + side * RIVER.halfWidth },
+        { x: b.x, z: b.z + side * RIVER.halfWidth }) <= supportRadius) return false;
+    }
+  }
+  return !BRIDGES.some(b => Math.hypot(Math.max(0, Math.abs(p.x - b.x) - b.halfWidth),
+    Math.max(0, Math.abs(p.z - b.z) - b.halfLength)) <= supportRadius);
+}
+
 /** 把河槽切成保守的窄矩形并扣掉桥面，供连续线段碰撞使用，避免采样漏过桥角。 */
 export function riverObstacles() {
   const xs = [...new Set([

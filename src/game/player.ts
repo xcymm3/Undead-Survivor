@@ -1,6 +1,6 @@
 import { ARENA, CONFIG, PLAYER, zombieContactRadius } from './config';
 import type { Position, Zombie } from './encounter';
-import { isWater } from './terrain';
+import { isPlayerInWater } from './terrain';
 import type { Navigation } from './navigation';
 
 /** 过滤 Pointer Lock 在 Windows 光标回绕时产生的半屏/整屏瞬时位移。 */
@@ -79,7 +79,7 @@ export class PlayerMotion {
   }
   update(position: Position, yaw: number, keys: ReadonlySet<string>, delta: number, navigation: Navigation, zombies: readonly Zombie[]) {
     if (!Number.isFinite(delta) || delta <= 0) return false;
-    if (this.grounded && navigation.river && isWater(position)) return true;
+    if (this.grounded && navigation.river && isPlayerInWater(position)) return true;
     if (this.requested && this.grounded) {
       this.velocity = PLAYER.jumpSpeed;
       this.grounded = false;
@@ -95,7 +95,7 @@ export class PlayerMotion {
         this.velocity -= PLAYER.gravity * step;
         if (this.height <= 1e-8 && this.velocity < 0) { this.height = 0; this.velocity = 0; this.grounded = true; }
       }
-      if (this.grounded && navigation.river && isWater(position)) return true;
+      if (this.grounded && navigation.river && isPlayerInWater(position)) return true;
     }
     return false;
   }

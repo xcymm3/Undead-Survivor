@@ -25,7 +25,7 @@ import { ArmorEffects } from './armorEffects';
 import { BreachSequence } from './breach';
 import { Navigation } from './navigation';
 import { filterPointerMovement, PlayerMotion, turnView } from './player';
-import { isWater, BRIDGES, RIVER_POINTS } from './terrain';
+import { isWater, isPlayerInWater, BRIDGES, RIVER_POINTS } from './terrain';
 import { CoopSession } from '../multiplayer/CoopSession';
 import { PartnerView } from '../multiplayer/PartnerView';
 import type { Match, Pawn } from '../multiplayer/types';
@@ -881,7 +881,7 @@ export class Game {
       coop: this.coop ? { host: this.coop.host, players: this.coop.players.map(p => ({ ...p })), local: this.coop.local.id, spectating: this.spectatedPlayerId } : null,
       wave: this.encounter.wave, wavesCleared: this.encounter.wavesCleared, waveTotal: this.encounter.pressure.count, waveSpawned: this.encounter.waveSpawned, intermission: this.encounter.intermission,
       jump: { height: this.playerMotion.height, velocity: this.playerMotion.velocity, grounded: this.playerMotion.grounded },
-      overWater: isWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),
+      overWater: isPlayerInWater(this.encounter.player), waterZombies: this.encounter.zombies.filter(z => z.health > 0 && isWater(z)).map(z => z.id), bridges: BRIDGES.map(b => ({ ...b })), river: RIVER_POINTS.map(p => ({ ...p })),
       health: this.encounter.health, player: { ...this.encounter.player }, pointerLocked: this.pointerLocked, lockHint: this.lockHint,
       phase: this.phase, mode: this.encounter.mode, difficulty: this.encounter.difficulty, survived: this.encounter.elapsed, totalSpawned: this.encounter.totalSpawned, pressure: this.encounter.pressure, nearest: this.encounter.nearest, result: this.result, ammo: this.firearm.ammo, shots: this.arsenal.shots, hits: this.hitCount, kills: this.kills, reloading: this.firearm.reloading,
       yaw: this.view.x, pitch: this.view.y, aim: this.aim.toArray(), aimPoint: this.aimPoint.toArray(), muzzle: muzzle.toArray(), ballisticMuzzle: this.ballisticMuzzle.toArray(), aiming: this.aiming, aimBlend: this.aimBlend, barrelDirection: barrelDirection.toArray(),
